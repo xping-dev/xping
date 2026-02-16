@@ -3,11 +3,11 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.Core.Serialization;
-
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+
+namespace Xping.Sdk.Core.Services.Serialization;
 
 /// <summary>
 /// Provides centralized JSON serialization configuration for the Xping SDK.
@@ -21,7 +21,7 @@ public static class XpingSerializerOptions
     /// Uses camel case naming, compact formatting, and string enum conversion.
     /// </summary>
     /// <remarks>
-    /// Configuration:
+    /// Options:
     /// - PropertyNamingPolicy: CamelCase (e.g., "testName" instead of "TestName")
     /// - WriteIndented: false (compact JSON for efficient transmission)
     /// - DefaultIgnoreCondition: WhenWritingNull (reduces payload size)
@@ -35,7 +35,7 @@ public static class XpingSerializerOptions
     /// Similar to API options but may include indentation for debugging.
     /// </summary>
     /// <remarks>
-    /// Configuration:
+    /// Options:
     /// - PropertyNamingPolicy: CamelCase
     /// - WriteIndented: false (compact to save disk space)
     /// - DefaultIgnoreCondition: WhenWritingNull
@@ -49,7 +49,7 @@ public static class XpingSerializerOptions
     /// Includes indentation for better readability in test output.
     /// </summary>
     /// <remarks>
-    /// Configuration:
+    /// Options:
     /// - PropertyNamingPolicy: CamelCase
     /// - WriteIndented: true (human-readable for debugging)
     /// - DefaultIgnoreCondition: WhenWritingNull
