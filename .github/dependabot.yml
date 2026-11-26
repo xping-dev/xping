@@ -1,0 +1,31 @@
+# Keeps pinned versions current: action SHAs, NuGet packages (Central Package Management),
+# the container base image digest and the .NET SDK in global.json.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      microsoft-extensions:
+        patterns: ['Microsoft.Extensions.*', 'System.*']
+      test:
+        patterns: ['xunit*', 'Moq', 'NSubstitute', 'WireMock.Net', 'AwesomeAssertions']
+
+  - package-ecosystem: docker
+    directory: /packaging/container
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: dotnet-sdk
+    directory: /
+    schedule:
+      interval: weekly

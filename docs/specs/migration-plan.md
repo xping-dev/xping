@@ -1,6 +1,6 @@
 # Migration plan: sdk-dotnet + dashboard → xping-dev/xping
 
-> Status: **Phase 3 done on `migrate/sdk-dotnet` (§7)** · 2026-11-26
+> Status: **Phase 4 in review on `ci/release` (§7)** · 2026-11-26
 > Source of truth: [`xping-redesign-prespec.md`](xping-redesign-prespec.md). (The task brief calls it `redesign-prespec.md`; the file in the repo is `xping-redesign-prespec.md`.)
 > This file will be updated through Phases 2–5 to show what was actually done, including deviations.
 
@@ -279,6 +279,34 @@ Done:
 Follow-ups:
 - Many migrated comments still explain choices in terms of Xping Cloud. They are harmless, but should be reworded as the code is touched.
 - `ReportGlyphs` / `TerminalText` are kept for the future text reporter and are unused today.
+
+### Phase 4: CI, release, supply chain (branch `ci/release`)
+
+- `ci.yml`: build, test and format check on PRs and `main`, ubuntu + windows. It is also callable (`workflow_call`), so the release runs the same checks first.
+- `release.yml` on tag `v*`:
+  - single-file binaries for linux-x64, linux-arm64, win-x64 (cross-published on ubuntu) and osx-arm64 (on macOS, so the SDK signs the apphost);
+  - NuGet packages `Xping.Cli` (dotnet tool) and `Xping.Session`;
+  - OCI image `ghcr.io/xping-dev/xping` for amd64 + arm64, built from the same binaries;
+  - CycloneDX SBOMs for the CLI, the library (CycloneDX .NET tool, pinned in `dotnet-tools.json`) and the image (syft);
+  - cosign keyless signatures (`*.sigstore.json`) for every file and for the image, with the image SBOM as a signed attestation;
+  - SLSA build provenance through `actions/attest-build-provenance` for every file (via `SHA256SUMS`) and for the image;
+  - a GitHub Release, NuGet trusted publishing (OIDC, no API key secret), and a push to ghcr.io with `GITHUB_TOKEN`.
+- Least privilege: the workflow starts with `permissions: {}` and each job asks only for what it uses. Actions are pinned by commit SHA. Checkouts don't persist credentials. Dependabot keeps actions, NuGet, the base image digest and the SDK current. `actionlint` and `zizmor --persona=auditor` are clean, apart from one stylistic hint, the new self-repository `uses:` syntax, which was not adopted.
+- Dry runs: `workflow_dispatch` (publish off by default) and pull requests that touch the release machinery build everything and upload it as workflow artifacts. Nothing is signed, attested or published in a dry run. Publishing from `workflow_dispatch` is refused unless it runs on the tag `v<version>`, and every run refuses a version that differs from `Directory.Build.props`.
+- `docs/reference/verifying-releases.md` documents `gh attestation verify` and `cosign verify(-blob)` for users.
+
+| Deviation | Why |
+|---|---|
+| Signing and attestation are not exercised by dry runs | Both write to public logs (Rekor, the attestation store) and would leave entries for builds that were never released. The first tag exercises them. |
+| Image base: `mcr.microsoft.com/dotnet/runtime-deps:10.0` (Ubuntu 24.04) + `git` | `xping check` runs `git diff`. The chiseled images have no package manager and no git. 376 MB uncompressed; a slimmer base can come later. |
+| The container builds arm64 under QEMU | Only `apt-get install git` runs emulated. The binary itself is built natively in the binaries job. |
+
+One-time setup before the first tag `v2.0.0-alpha.1`:
+1. **nuget.org trusted publishing:** add a policy for owner `Xping`, repository `xping-dev/xping`, workflow `release.yml`, environment `release`. Set the repository variable `NUGET_USER` to the nuget.org profile name that owns the packages.
+2. **Old CLI versions:** mark `Xping.Cli` 1.0.0-rc.1…rc.8 as deprecated, with 2.0.0-alpha.1 as the alternative (Q4). Text: `docs/specs/followups/` (Phase 5).
+3. **ghcr.io:** after the first push, make the `xping` package public and link it to the repository.
+4. **Repository settings:** enable private vulnerability reporting (SECURITY.md). Optionally add required reviewers to the `release` environment.
+5. **nuget.org:** request the `Xping.*` ID prefix reservation (§5).
 
 ## 8. docs.xping.io switch steps
 

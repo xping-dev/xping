@@ -1,0 +1,417 @@
+name: Release
+
+# Builds, signs and publishes one release:
+# - self-contained single-file binaries for linux-x64, linux-arm64, win-x64 and osx-arm64;
+# - the Xping.Cli dotnet tool and the Xping.Session library (NuGet);
+# - the OCI image ghcr.io/xping-dev/xping (linux/amd64, linux/arm64);
+# - CycloneDX SBOMs for the CLI, the library and the image;
+# - cosign keyless signatures and GitHub artifact attestations (SLSA provenance) for all of the above.
+#
+# A tag v<version> publishes. A pull request that changes the release machinery, and
+# workflow_dispatch by default, are dry runs: everything is built and uploaded as workflow
+# artifacts, but nothing is signed, attested or published.
+# Verification steps for users: docs/reference/verifying-releases.md.
+
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - .github/workflows/ci.yml
+      - packaging/**
+      - dotnet-tools.json
+      - Directory.Build.props
+      - src/Xping.Cli/Xping.Cli.csproj
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build, without the leading v. Must equal the version in Directory.Build.props.
+        required: true
+        default: 2.0.0-alpha.1
+      publish:
+        description: Sign, attest and publish. Only allowed when run on the tag v<version>.
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  IMAGE: ghcr.io/xping-dev/xping
+
+jobs:
+  version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      publish: ${{ steps.resolve.outputs.publish }}
+      prerelease: ${{ steps.resolve.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+
+      - name: Resolve and check the version
+        id: resolve
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_PUBLISH: ${{ inputs.publish }}
+        run: |
+          set -euo pipefail
+          declared="$(dotnet msbuild src/Xping.Cli/Xping.Cli.csproj -getProperty:Version -nologo)"
+
+          if [ "$EVENT" = "push" ]; then
+            version="${REF_NAME#v}"
+            publish=true
+          elif [ "$EVENT" = "pull_request" ]; then
+            version="$declared"
+            publish=false
+          else
+            version="$INPUT_VERSION"
+            publish="$INPUT_PUBLISH"
+            if [ "$publish" = "true" ] && [ "$REF" != "refs/tags/v$version" ]; then
+              echo "::error::Publishing is only allowed from the tag v$version (this run is on $REF)."
+              exit 1
+            fi
+          fi
+
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'$version' is not a SemVer version."
+            exit 1
+          fi
+
+          if [ "$declared" != "$version" ]; then
+            echo "::error::Version $version does not match Directory.Build.props ($declared)."
+            exit 1
+          fi
+
+          prerelease=false
+          [[ "$version" == *-* ]] && prerelease=true
+
+          {
+            echo "version=$version"
+            echo "publish=$publish"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
+          echo "Version $version, publish=$publish, prerelease=$prerelease" >> "$GITHUB_STEP_SUMMARY"
+
+  test:
+    name: CI
+    needs: version
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
+  binaries:
+    name: Binary (${{ matrix.rid }})
+    needs: [version, test]
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { rid: linux-x64, os: ubuntu-latest, image-arch: amd64 }
+          - { rid: linux-arm64, os: ubuntu-latest, image-arch: arm64 }
+          - { rid: win-x64, os: ubuntu-latest, image-arch: '' }
+          # Built on macOS: the SDK signs the apphost only there, and macOS refuses an unsigned arm64 binary.
+          - { rid: osx-arm64, os: macos-latest, image-arch: '' }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      RID: ${{ matrix.rid }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+
+      - name: Publish
+        run: dotnet publish src/Xping.Cli/Xping.Cli.csproj -c Release -r "$RID" -o out
+
+      - name: Smoke test
+        if: matrix.rid == 'linux-x64' || matrix.rid == 'osx-arm64'
+        run: |
+          set -euo pipefail
+          test "$(out/xping --version)" = "$VERSION"
+          out/xping --help > /dev/null
+
+      - name: Archive
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp LICENSE README.md out/
+          name="xping-$VERSION-$RID"
+          if [ "$RID" = "win-x64" ]; then
+            (cd out && zip -q -X "../dist/$name.zip" xping.exe LICENSE README.md)
+          else
+            tar -C out -czf "dist/$name.tar.gz" xping LICENSE README.md
+          fi
+          ls -l dist
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: bin-${{ matrix.rid }}
+          path: dist/*
+          if-no-files-found: error
+
+      # The image is built from these exact binaries, not from a second compilation.
+      - name: Stage binary for the image
+        if: matrix.image-arch != ''
+        run: mkdir -p image && cp out/xping image/xping
+
+      - if: matrix.image-arch != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-linux-${{ matrix.image-arch }}
+          path: image/xping
+          if-no-files-found: error
+
+  packages:
+    name: NuGet packages and SBOMs
+    needs: [version, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+
+      - name: Pack
+        run: dotnet pack Xping.slnx -c Release -o dist
+
+      - name: CycloneDX SBOMs
+        run: |
+          set -euo pipefail
+          dotnet tool restore
+          dotnet CycloneDX src/Xping.Cli/Xping.Cli.csproj --recursive --output dist --output-format Json \
+            --set-version "$VERSION" --filename "xping-$VERSION.cdx.json"
+          dotnet CycloneDX src/Xping.Session/Xping.Session.csproj --recursive --output dist --output-format Json \
+            --set-version "$VERSION" --filename "xping-session-$VERSION.cdx.json"
+
+      - name: Check the packages
+        run: |
+          set -euo pipefail
+          ls -l dist
+          test -f "dist/Xping.Cli.$VERSION.nupkg"
+          test -f "dist/Xping.Session.$VERSION.nupkg"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: packages
+          path: dist/*
+          if-no-files-found: error
+
+  image:
+    name: OCI image
+    needs: [version, binaries]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write      # push to ghcr.io
+      id-token: write      # cosign keyless and attestations
+      attestations: write  # image provenance attestation
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      PUBLISH: ${{ needs.version.outputs.publish }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image-linux-amd64
+          path: packaging/container/linux-amd64
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image-linux-arm64
+          path: packaging/container/linux-arm64
+
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Tags
+        id: tags
+        env:
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        run: |
+          tags="$IMAGE:$VERSION"
+          [ "$PRERELEASE" = "false" ] && tags="$tags,$IMAGE:latest"
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+          # Dry run: build both platforms into an OCI archive instead of pushing.
+          if [ "$PUBLISH" = "true" ]; then
+            echo "outputs=type=registry" >> "$GITHUB_OUTPUT"
+          else
+            echo "outputs=type=oci,dest=$RUNNER_TEMP/image.tar" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: needs.version.outputs.publish == 'true'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: packaging/container
+          file: packaging/container/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.tags.outputs.tags }}
+          outputs: ${{ steps.tags.outputs.outputs }}
+          # Provenance comes from GitHub artifact attestations below, the SBOM from syft.
+          provenance: false
+          sbom: false
+          labels: |
+            org.opencontainers.image.title=xping
+            org.opencontainers.image.description=Detects weakened tests in pull requests. Runs entirely in your CI.
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ env.VERSION }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=MIT
+
+      - name: SBOM of the image
+        uses: anchore/sbom-action@dfcb83b97731532d72be422cbc51ee64adb6fd56 # v0.24.4
+        with:
+          image: ${{ needs.version.outputs.publish == 'true' && format('{0}@{1}', env.IMAGE, steps.build.outputs.digest) || format('oci-archive:{0}/image.tar', runner.temp) }}
+          format: cyclonedx-json
+          output-file: xping-image-${{ env.VERSION }}.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-sbom
+          path: xping-image-${{ env.VERSION }}.cdx.json
+          if-no-files-found: error
+
+      - if: needs.version.outputs.publish == 'true'
+        uses: sigstore/cosign-installer@881c63bd87e38389154debd8331404ce7ca8a3ab # v4.1.4
+
+      - name: Sign the image and attach its SBOM
+        if: needs.version.outputs.publish == 'true'
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes "$IMAGE@$DIGEST"
+          cosign attest --yes --type cyclonedx --predicate "xping-image-$VERSION.cdx.json" "$IMAGE@$DIGEST"
+
+      - name: Attest the image provenance
+        if: needs.version.outputs.publish == 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  release:
+    name: Sign, attest and publish
+    needs: [version, binaries, packages, image]
+    if: needs.version.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Scope for NuGet trusted publishing and for any required reviewers.
+    environment: release
+    permissions:
+      contents: write      # create the GitHub Release
+      id-token: write      # cosign keyless, attestations, NuGet trusted publishing
+      attestations: write  # build provenance for every release file
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+      PRERELEASE: ${{ needs.version.outputs.prerelease }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: '{bin-*,packages,image-sbom}'
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+
+      - uses: sigstore/cosign-installer@881c63bd87e38389154debd8331404ce7ca8a3ab # v4.1.4
+
+      - name: Sign every file
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          for file in *; do
+            cosign sign-blob --yes --bundle "$file.sigstore.json" "$file"
+          done
+
+      - name: Attest provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-checksums: dist/SHA256SUMS
+
+      - name: Push to NuGet
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        id: nuget
+        with:
+          user: ${{ vars.NUGET_USER }}
+
+      - name: dotnet nuget push
+        env:
+          NUGET_API_KEY: ${{ steps.nuget.outputs.NUGET_API_KEY }}
+        run: |
+          set -euo pipefail
+          for package in dist/*.nupkg; do
+            dotnet nuget push "$package" --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+          done
+
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          flags=()
+          [ "$PRERELEASE" = "true" ] && flags+=(--prerelease)
+          cat > notes.md <<NOTES
+          Container image: \`ghcr.io/xping-dev/xping:$VERSION\`
+          .NET tool: \`dotnet tool install -g Xping.Cli --version $VERSION\`
+
+          Every file has a cosign bundle (\`*.sigstore.json\`) and a GitHub build provenance attestation.
+          How to verify: https://github.com/$GH_REPO/blob/v$VERSION/docs/reference/verifying-releases.md
+          NOTES
+          gh release create "v$VERSION" dist/* --verify-tag --title "v$VERSION" --notes-file notes.md --generate-notes "${flags[@]}"
