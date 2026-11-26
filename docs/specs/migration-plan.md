@@ -336,7 +336,7 @@ Today: `docs.xping.io` is a DNS CNAME to `xping-dev.github.io`. GitHub Pages of 
 2. **Prepare the content in sdk-dotnet first.** Merge `feat/docs-overhaul`. Then list the pages to move. Sections on `main` today:
    - getting-started (5), guides (13), configuration (2), troubleshooting (2), performance (2), cli (1), known-limitations, versioning;
    - `internals/implementation-specs` (old CLI specs: do not move).
-3. **Create `xping-dev/docs`** (public, MIT) from `xping-dev/docs` (was `docs/specs/followups/docs-repo/`):
+3. **`xping-dev/docs`** exists (public, MIT; created 2026-11-26 from the Phase 5 skeleton). Next:
    - move the SDK pages to `sdk/`, in one commit naming `xping-dev/sdk-dotnet@<sha> docs/`;
    - drop the Cloud, old `report` CLI and `internals/` pages.
 4. **Keep old URLs working.** Code and NuGet readmes of released SDK packages link these pages; each gets a redirect page (docfx `redirect_url` metadata) at its old path, pointing at the new one:
