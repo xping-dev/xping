@@ -1,0 +1,36 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Until xping check is implemented it exits 69 (not implemented); the action must report that.
+      - id: xping
+        uses: ./
+        continue-on-error: true
+        with:
+          version: 2.0.0-alpha.1
+          args: --local
+
+      - name: Exit code is passed through
+        shell: bash
+        env:
+          CODE: ${{ steps.xping.outputs.exit-code }}
+        run: test "$CODE" = 69

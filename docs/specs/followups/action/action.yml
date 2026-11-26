@@ -1,0 +1,103 @@
+# xping-dev/action: runs a pinned, verified xping release. No logic lives here; the CLI does the work.
+name: Xping
+description: Check pull requests for weakened tests, and record default-branch runs to history in your own repository.
+author: Xping
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  command:
+    description: "check (pull requests), record or compact (default branch only)."
+    required: false
+    default: check
+  version:
+    description: Exact xping version, e.g. 2.0.0-alpha.1. Pinned on purpose; there is no "latest".
+    required: true
+  results:
+    description: Test result files or globs (JUnit XML, TRX, Xping session), one per line.
+    required: false
+    default: ''
+  args:
+    description: Extra arguments for the command, separated by spaces.
+    required: false
+    default: ''
+  token:
+    description: Token for the GitHub API (PR comments on check, pushing history on record).
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  exit-code:
+    description: The xping exit code (docs/reference/exit-codes.md in xping-dev/xping).
+    value: ${{ steps.run.outputs.exit-code }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install xping ${{ inputs.version }}
+      shell: bash
+      env:
+        COMMAND: ${{ inputs.command }}
+        VERSION: ${{ inputs.version }}
+        GH_TOKEN: ${{ inputs.token }}
+        RUNNER_OS_NAME: ${{ runner.os }}
+        RUNNER_ARCH_NAME: ${{ runner.arch }}
+      run: |
+        set -euo pipefail
+
+        case "$COMMAND" in
+          check|record|compact) ;;
+          *) echo "::error::command must be check, record or compact (got '$COMMAND')."; exit 1 ;;
+        esac
+        if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+          echo "::error::version must be an exact SemVer version (got '$VERSION')."
+          exit 1
+        fi
+
+        case "$RUNNER_OS_NAME/$RUNNER_ARCH_NAME" in
+          Linux/X64)   rid=linux-x64;   archive=tar.gz ;;
+          Linux/ARM64) rid=linux-arm64; archive=tar.gz ;;
+          Windows/X64) rid=win-x64;     archive=zip ;;
+          macOS/ARM64) rid=osx-arm64;   archive=tar.gz ;;
+          *) echo "::error::No xping build for $RUNNER_OS_NAME/$RUNNER_ARCH_NAME."; exit 1 ;;
+        esac
+
+        dir="$RUNNER_TEMP/xping-$VERSION"
+        file="xping-$VERSION-$rid.$archive"
+        mkdir -p "$dir"
+        gh release download "v$VERSION" --repo xping-dev/xping --dir "$dir" --pattern "$file" --pattern SHA256SUMS --clobber
+
+        # Integrity, then provenance: built by xping-dev/xping's release workflow, not just uploaded there.
+        (cd "$dir" && grep " $file\$" SHA256SUMS | sha256sum --check --strict)
+        gh attestation verify "$dir/$file" --repo xping-dev/xping --signer-workflow xping-dev/xping/.github/workflows/release.yml
+
+        if [ "$archive" = zip ]; then
+          ZIP="$dir/$file" DEST="$dir/bin" pwsh -NoProfile -Command 'Expand-Archive -LiteralPath $env:ZIP -DestinationPath $env:DEST -Force'
+        else
+          mkdir -p "$dir/bin" && tar -xzf "$dir/$file" -C "$dir/bin"
+        fi
+        echo "$dir/bin" >> "$GITHUB_PATH"
+
+    - name: xping ${{ inputs.command }}
+      id: run
+      shell: bash
+      env:
+        COMMAND: ${{ inputs.command }}
+        RESULTS: ${{ inputs.results }}
+        ARGS: ${{ inputs.args }}
+        # TODO(spec): the variable xping reads for the provider token. GITHUB_TOKEN is the provider default.
+        GITHUB_TOKEN: ${{ inputs.token }}
+      run: |
+        set -uo pipefail
+        argv=("$COMMAND")
+        while IFS= read -r pattern; do
+          [ -n "$pattern" ] && argv+=(--results "$pattern")
+        done <<< "$RESULTS"
+        read -r -a extra <<< "$ARGS"
+        argv+=("${extra[@]}")
+
+        xping "${argv[@]}"
+        code=$?
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+        exit "$code"
