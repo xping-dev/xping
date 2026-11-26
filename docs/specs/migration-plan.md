@@ -212,7 +212,7 @@ Recommendation: apply for **ID prefix reservation `Xping.*`** on nuget.org now. 
 | Q3 | Option **a**: the engine moves to `Xping.Core/Triage/`; `Contract/`, `Rendering/`, goldens and the `report`/`repro`/`where`/`clear` commands are purged in pass 2. |
 | Q4 | `Xping.Cli` continues at **`2.0.0-alpha.1`**. rc.1–rc.8 get a NuGet deprecation message pointing at 2.x; they are not unlisted. |
 | Q5 | `ProjectId` is read from old files as an optional field and dropped from the v1 writer. |
-| Q6 | Product docs live in a **separate public docs repo** (proposed `xping-dev/docs`), not here and not in `system-docs` (private, holds internal dashboard plans). Reference material generated from code stays in this repo and the docs build pulls it in: command reference (from `--help`), `schema/*.json`, rule pages (XP001…), `.xping.yml` reference. `docs/specs/` stays here. Phase 5 becomes: prepare the docs repo skeleton under `docs/specs/followups/docs-repo/` plus the DNS steps; this repo's `docs/` keeps only specs and generated reference. |
+| Q6 | Product docs live in a **separate public docs repo** (proposed `xping-dev/docs`), not here and not in `system-docs` (private, holds internal dashboard plans). Reference material generated from code stays in this repo and the docs build pulls it in: command reference (from `--help`), `schema/*.json`, rule pages (XP001…), `.xping.yml` reference. `docs/specs/` stays here. Phase 5 becomes: prepare the docs repo skeleton under `xping-dev/docs` (was `docs/specs/followups/docs-repo/`) plus the DNS steps; this repo's `docs/` keeps only specs and generated reference. |
 | Q7 | Jenkins PR detector is dropped. |
 | Q8 | `git-filter-repo` is installed via Homebrew. |
 
@@ -314,7 +314,7 @@ Drafts under `docs/specs/followups/` (index: `followups/README.md`):
 
 | Draft | State |
 |---|---|
-| `docs-repo/`: skeleton for public `xping-dev/docs` | docfx 2.81.0 site with sections (getting started, CI setup, rules, reference, SDK), `scripts/import-reference.sh <tag>`, which imports `docs/reference/*.md` and `schema/*.json` from this repo at the tag in `xping-version.txt`, and a Pages workflow with pinned actions. Built locally against `main`: 0 warnings, 0 errors. |
+| `docs-repo/`: skeleton for public `xping-dev/docs`. **Moved** to [xping-dev/docs](https://github.com/xping-dev/docs) in `8bec4bc` (2026-11-26), with `xping-version.txt` = `main` until the first release. There the build passes; deploy waits for Pages to be enabled (§8, step 5.1). | docfx 2.81.0 site with sections (getting started, CI setup, rules, reference, SDK), `scripts/import-reference.sh <tag>`, which imports `docs/reference/*.md` and `schema/*.json` from this repo at the tag in `xping-version.txt`, and a Pages workflow with pinned actions. Built locally against `main`: 0 warnings, 0 errors. |
 | `sdk-dotnet-readme-note.md` | README banner pointing to this repo, plus what to delete in sdk-dotnet afterwards. Wording about Xping Cloud itself is a TODO(decision), prespec §11.12. |
 | `nuget-deprecation.md` | Deprecation of `Xping.Cli` 1.0.0-rc.1…rc.8: reason Legacy, alternative 2.0.0-alpha.1, a 495-character message. Not unlisted (Q4). |
 | `sdk-on-xping-session.md` | The steps: a public writer API in `Xping.Session` with API-compat checks, then sdk-dotnet replaces its model/store copies with the package. Risks included. |
@@ -336,7 +336,7 @@ Today: `docs.xping.io` is a DNS CNAME to `xping-dev.github.io`. GitHub Pages of 
 2. **Prepare the content in sdk-dotnet first.** Merge `feat/docs-overhaul`. Then list the pages to move. Sections on `main` today:
    - getting-started (5), guides (13), configuration (2), troubleshooting (2), performance (2), cli (1), known-limitations, versioning;
    - `internals/implementation-specs` (old CLI specs: do not move).
-3. **Create `xping-dev/docs`** (public, MIT) from `docs/specs/followups/docs-repo/`:
+3. **Create `xping-dev/docs`** (public, MIT) from `xping-dev/docs` (was `docs/specs/followups/docs-repo/`):
    - move the SDK pages to `sdk/`, in one commit naming `xping-dev/sdk-dotnet@<sha> docs/`;
    - drop the Cloud, old `report` CLI and `internals/` pages.
 4. **Keep old URLs working.** Code and NuGet readmes of released SDK packages link these pages; each gets a redirect page (docfx `redirect_url` metadata) at its old path, pointing at the new one:

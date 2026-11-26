@@ -1,7 +1,0 @@
-_site/
-obj/
-# Imported from xping-dev/xping by scripts/import-reference.sh at the tag in xping-version.txt.
-/schema/
-/reference/*.md
-!/reference/index.md
-/reference/toc.yml
