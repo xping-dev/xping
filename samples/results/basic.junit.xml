@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sample JUnit report: one pass, one failure, one skip. Used by Xping.Evidence tests. -->
+<testsuites name="Sample.Tests" tests="3" failures="1" skipped="1" errors="0" time="0.412">
+  <testsuite name="Sample.Tests.OrderServiceTests" tests="3" failures="1" skipped="1" errors="0" time="0.412" timestamp="2026-11-26T10:00:00Z" hostname="runner-1">
+    <testcase classname="Sample.Tests.OrderServiceTests" name="ProcessesBatch_Under250ms" time="0.236" />
+    <testcase classname="Sample.Tests.OrderServiceTests" name="RejectsEmptyOrder" time="0.171">
+      <failure type="Xunit.Sdk.EqualException" message="Assert.Equal() Failure: Values differ">at Sample.Tests.OrderServiceTests.RejectsEmptyOrder() in OrderServiceTests.cs:line 42</failure>
+    </testcase>
+    <testcase classname="Sample.Tests.OrderServiceTests" name="ExportsCsv" time="0">
+      <skipped message="flaky" />
+    </testcase>
+  </testsuite>
+</testsuites>

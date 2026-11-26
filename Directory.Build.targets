@@ -1,0 +1,13 @@
+<Project>
+  <!-- Test packages for every test project, so test csproj files stay short. -->
+  <ItemGroup Condition="'$(IsTestProject)' == 'true'">
+    <PackageReference Include="xunit.v3" />
+    <Using Include="Xunit" />
+    <Compile Include="$(MSBuildThisFileDirectory)tests/Shared/*.cs" Link="Shared/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- Each packable project ships the repository README. -->
+  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>

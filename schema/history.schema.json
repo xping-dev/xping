@@ -1,0 +1,236 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:xping:schema:history:v1",
+  "title": "Xping execution history",
+  "description": "Files on the history ref (default branch xping-history) in the customer's repository: meta.json, runs/YYYY/MM/<sha>-<runid>.json.gz (one immutable file per default-branch run) and stats/tests.json.gz (compacted baselines that PRs read). A public, versioned contract. DRAFT v1. Readers must ignore unknown properties. TODO(spec): every field below.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/meta"
+    },
+    {
+      "$ref": "#/$defs/run"
+    },
+    {
+      "$ref": "#/$defs/stats"
+    }
+  ],
+  "$defs": {
+    "meta": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "kind"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "kind": {
+          "const": "meta"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "retention": {
+          "type": "object",
+          "properties": {
+            "rawRunDays": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "description": "Where the run executed. Baselines are kept per environmentKey and never mixed.",
+      "properties": {
+        "environmentKey": {
+          "type": "string",
+          "description": "Stable key for OS + architecture + matrix entry."
+        },
+        "os": {
+          "type": "string"
+        },
+        "architecture": {
+          "type": "string"
+        },
+        "cpuCount": {
+          "type": "integer"
+        },
+        "runnerName": {
+          "type": "string"
+        },
+        "runnerType": {
+          "type": "string",
+          "enum": [
+            "hosted",
+            "selfHosted",
+            "unknown"
+          ]
+        },
+        "matrix": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "run": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "kind",
+        "commitSha",
+        "runId",
+        "recordedAt",
+        "sessions"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "kind": {
+          "const": "run"
+        },
+        "commitSha": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "runId": {
+          "type": "string",
+          "description": "CI provider run/pipeline ID."
+        },
+        "provider": {
+          "type": "string",
+          "enum": [
+            "gitHub",
+            "gitLab",
+            "azureDevOps",
+            "none"
+          ]
+        },
+        "recordedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "environment": {
+          "$ref": "#/$defs/environment"
+        },
+        "sessions": {
+          "type": "array",
+          "items": {
+            "$ref": "session.schema.json"
+          }
+        }
+      }
+    },
+    "testBaseline": {
+      "type": "object",
+      "required": [
+        "fullyQualifiedName",
+        "environmentKey",
+        "runs"
+      ],
+      "properties": {
+        "testFingerprint": {
+          "type": "string"
+        },
+        "fullyQualifiedName": {
+          "type": "string"
+        },
+        "caseId": {
+          "type": "string"
+        },
+        "concreteClass": {
+          "type": "string"
+        },
+        "environmentKey": {
+          "type": "string"
+        },
+        "runs": {
+          "type": "integer"
+        },
+        "failures": {
+          "type": "integer"
+        },
+        "skips": {
+          "type": "integer"
+        },
+        "firstSeenAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lastFailureAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "durationMs": {
+          "type": "object",
+          "properties": {
+            "p50": {
+              "type": "number"
+            },
+            "p95": {
+              "type": "number"
+            },
+            "p99": {
+              "type": "number"
+            },
+            "max": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "stats": {
+      "type": "object",
+      "required": [
+        "schemaVersion",
+        "kind",
+        "compactedAt",
+        "tests"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "kind": {
+          "const": "stats"
+        },
+        "compactedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "window": {
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "to": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "runs": {
+              "type": "integer"
+            }
+          }
+        },
+        "tests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/testBaseline"
+          }
+        }
+      }
+    }
+  }
+}

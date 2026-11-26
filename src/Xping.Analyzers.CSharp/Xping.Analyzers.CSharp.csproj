@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Roslyn-based C# test analysis for Xping rules.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Xping.Core\Xping.Core.csproj" />
+  </ItemGroup>
+
+</Project>

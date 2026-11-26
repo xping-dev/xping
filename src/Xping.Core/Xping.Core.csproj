@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Xping rules engine, findings model, policy and .xping.yml configuration.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Xping.Session\Xping.Session.csproj" />
+  </ItemGroup>
+
+</Project>

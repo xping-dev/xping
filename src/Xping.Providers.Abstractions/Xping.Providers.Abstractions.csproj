@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>Xping.Providers</RootNamespace>
+    <Description>CI provider contract for Xping: environment detection, pull request context and PR comments.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Xping.Core\Xping.Core.csproj" />
+  </ItemGroup>
+
+</Project>

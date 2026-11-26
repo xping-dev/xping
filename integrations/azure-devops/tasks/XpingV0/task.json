@@ -1,0 +1,48 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Microsoft/azure-pipelines-task-lib/master/tasks.schema.json",
+  "id": "1ccd307a-5d6c-4b88-a8d7-d57514a88f15",
+  "name": "Xping",
+  "friendlyName": "Xping",
+  "description": "Run xping check, record or compact.",
+  "category": "Test",
+  "author": "Xping",
+  "version": { "Major": 0, "Minor": 0, "Patch": 1 },
+  "instanceNameFormat": "xping $(command)",
+  "inputs": [
+    {
+      "name": "command",
+      "type": "pickList",
+      "label": "Command",
+      "defaultValue": "check",
+      "required": true,
+      "options": { "check": "check", "record": "record", "compact": "compact" },
+      "helpMarkDown": "check on pull requests; record and compact on the default branch only."
+    },
+    {
+      "name": "version",
+      "type": "string",
+      "label": "Xping version",
+      "defaultValue": "",
+      "required": true,
+      "helpMarkDown": "Exact xping version to run, e.g. 2.0.0-alpha.1. Pinned on purpose: no 'latest'."
+    },
+    {
+      "name": "results",
+      "type": "multiLine",
+      "label": "Test results",
+      "defaultValue": "**/TestResults/*.trx",
+      "required": false,
+      "helpMarkDown": "JUnit XML, TRX or Xping session files, one glob per line."
+    },
+    {
+      "name": "arguments",
+      "type": "string",
+      "label": "Extra arguments",
+      "defaultValue": "",
+      "required": false
+    }
+  ],
+  "execution": {
+    "Node20_1": { "target": "index.js" }
+  }
+}

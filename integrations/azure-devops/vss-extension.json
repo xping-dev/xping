@@ -1,0 +1,23 @@
+{
+  "manifestVersion": 1,
+  "id": "xping",
+  "name": "Xping",
+  "version": "0.0.1",
+  "publisher": "TODO-marketplace-publisher-id",
+  "description": "Detects weakened tests in pull requests and backs findings with execution history kept in your own repository. Runs entirely in your pipeline.",
+  "public": false,
+  "categories": ["Azure Pipelines"],
+  "targets": [{ "id": "Microsoft.VisualStudio.Services" }],
+  "tags": ["testing", "pull-request", "code-review", "agents"],
+  "repository": { "type": "git", "uri": "https://github.com/xping-dev/xping" },
+  "content": { "details": { "path": "README.md" } },
+  "files": [{ "path": "tasks/XpingV0" }],
+  "contributions": [
+    {
+      "id": "xping-task",
+      "type": "ms.vss-distributed-task.task",
+      "targets": ["ms.vss-distributed-task.tasks"],
+      "properties": { "name": "tasks/XpingV0" }
+    }
+  ]
+}

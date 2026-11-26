@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Execution history stores for Xping: git branch, CI artifact and local file.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Xping.Core\Xping.Core.csproj" />
+  </ItemGroup>
+
+</Project>

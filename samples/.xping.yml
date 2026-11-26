@@ -1,0 +1,17 @@
+# Sample Xping configuration.
+# TODO(spec): the .xping.yml format is not final. Keys below show intent, nothing reads them yet.
+version: 1
+
+policy:
+  # warn: report only. block: fail the check (exit code 1).
+  default: warn
+  rules:
+    XP001: block   # assertion removed or weakened
+    XP004: block   # class under test mocked
+  # Stricter policy for pull requests opened by coding agents.
+  agents:
+    default: block
+
+history:
+  ref: xping-history
+  retainDays: 90

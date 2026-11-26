@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>tree-sitter-based test analysis for Xping rules in languages other than C#.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Xping.Core\Xping.Core.csproj" />
+  </ItemGroup>
+
+</Project>

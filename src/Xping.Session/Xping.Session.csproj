@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Canonical Xping session schema: test runs, executions, identity and environment, plus the local session store. Shared by the Xping CLI and the Xping SDK.</Description>
+    <!-- netstandard2.0 so the Xping SDK (netstandard2.0) can depend on this package. -->
+    <TargetFramework />
+    <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
+    <IsPackable>true</IsPackable>
+    <PackageId>Xping.Session</PackageId>
+  </PropertyGroup>
+
+</Project>

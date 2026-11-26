@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Xping.Cli\Xping.Cli.csproj" />
+  </ItemGroup>
+
+</Project>
