@@ -290,7 +290,8 @@ internal static class TestSessionFactory
             Executions = session.Executions,
             Assemblies = session.Assemblies,
             SessionState = session.SessionState,
-            SdkVersion = session.SdkVersion,
+            SchemaVersion = session.SchemaVersion,
+            Producer = session.Producer,
             StatisticsByAssembly = new Dictionary<string, AssemblyStatistics>
             {
                 [assembly] = new() { DiscoveredTestCases = discovered, SelectedTestCases = selected }

@@ -279,7 +279,7 @@ public sealed class SessionAssembliesTests
     }
 
     [Fact]
-    public void ProjectPreservesTheSdkVersionThatRecordedTheRun()
+    public void ProjectPreservesTheProducerThatRecordedTheRun()
     {
         // Guards against rebuilding through TestSessionBuilder, which stamps the running assembly's
         // version and would relabel a session recorded by an older SDK with the reader's version.
@@ -287,14 +287,14 @@ public sealed class SessionAssembliesTests
         {
             SessionId = Guid.NewGuid(),
             StartedAt = new DateTime(2026, 8, 1, 9, 0, 0, DateTimeKind.Utc),
-            SdkVersion = "0.0.1-ancient",
+            Producer = new SessionProducer(SessionProducer.SdkDotnet, "0.0.1-ancient"),
             Executions = [Execution("A", "Alpha.Tests"), Execution("B", "Beta.Tests")]
         };
 
         TestSession projected = Assert.IsType<TestSession>(
             SessionAssemblies.Project(session, "Alpha.Tests"));
 
-        Assert.Equal("0.0.1-ancient", projected.SdkVersion);
+        Assert.Equal(new SessionProducer(SessionProducer.SdkDotnet, "0.0.1-ancient"), projected.Producer);
     }
 
     // -----------------------------------------------------------------------
@@ -359,7 +359,8 @@ public sealed class SessionAssembliesTests
         // rewritten file would land under a different name than the one it replaced.
         Assert.Equal(session.SessionId, remaining.SessionId);
         Assert.Equal(session.StartedAt, remaining.StartedAt);
-        Assert.Equal(session.SdkVersion, remaining.SdkVersion);
+        Assert.Equal(session.Producer, remaining.Producer);
+        Assert.Equal(session.SchemaVersion, remaining.SchemaVersion);
     }
 
     [Theory]

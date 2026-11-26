@@ -171,7 +171,8 @@ internal static class SessionAssemblies
             Assemblies = derived,
             SessionState = session.SessionState,
             PullRequestContext = session.PullRequestContext,
-            SdkVersion = session.SdkVersion,
+            SchemaVersion = session.SchemaVersion,
+            Producer = session.Producer,
             QuickStatistics = session.QuickStatistics,
             StatisticsByAssembly = session.StatisticsByAssembly
         };
@@ -204,9 +205,9 @@ internal static class SessionAssemblies
         if (executions.Count == session.Executions.Count)
             return session;
 
-        // Built by object initializer rather than TestSessionBuilder: the builder stamps SdkVersion
-        // from the running assembly, which would relabel a session recorded by an older SDK with the
-        // version of whatever is reading it.
+        // Built by object initializer rather than TestSessionBuilder: the builder stamps the producer
+        // from the running assembly, which would relabel a session recorded by an older SDK with
+        // whatever is reading it.
         return new TestSession
         {
             SessionId = session.SessionId,
@@ -219,7 +220,8 @@ internal static class SessionAssemblies
             Assemblies = Of(executions),
             SessionState = session.SessionState,
             PullRequestContext = session.PullRequestContext,
-            SdkVersion = session.SdkVersion,
+            SchemaVersion = session.SchemaVersion,
+            Producer = session.Producer,
             QuickStatistics = null,
             // Kept, unlike the one above, because it is the one statistic that decomposes: each
             // entry already counts exactly one assembly's executions.

@@ -13,23 +13,24 @@ namespace Xping.Session.Tests.Models;
 public sealed class TestSessionTests
 {
     // ---------------------------------------------------------------------------
-    // SdkVersion — parameterless constructor (JSON deserialization path)
+    // Schema version and producer — parameterless constructor (JSON deserialization path)
     // ---------------------------------------------------------------------------
 
     [Fact]
-    public void Constructor_DefaultParameterless_SdkVersionMatchesXpingSdkVersionCurrent()
+    public void Constructor_DefaultParameterless_WritesTheCurrentSchemaAsThisLibrary()
     {
         var session = new TestSession();
 
-        Assert.Equal(XpingVersion.Current, session.SdkVersion);
+        Assert.Equal(SessionSchema.CurrentVersion, session.SchemaVersion);
+        Assert.Equal(new SessionProducer("xping-session", XpingVersion.Current), session.Producer);
     }
 
     // ---------------------------------------------------------------------------
-    // SdkVersion — builder-constructed session (normal creation path)
+    // Schema version and producer — builder-constructed session (normal creation path)
     // ---------------------------------------------------------------------------
 
     [Fact]
-    public void Build_WithExecution_SdkVersionMatchesXpingSdkVersionCurrent()
+    public void Build_WithExecution_WritesTheCurrentSchemaAsThisLibrary()
     {
         var session = new TestSessionBuilder()
             .AddExecution(
@@ -39,6 +40,7 @@ public sealed class TestSessionTests
                     .Build())
             .Build();
 
-        Assert.Equal(XpingVersion.Current, session.SdkVersion);
+        Assert.Equal(SessionSchema.CurrentVersion, session.SchemaVersion);
+        Assert.Equal(new SessionProducer("xping-session", XpingVersion.Current), session.Producer);
     }
 }

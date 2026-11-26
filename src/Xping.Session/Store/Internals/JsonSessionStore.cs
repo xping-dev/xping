@@ -515,14 +515,14 @@ internal sealed class JsonSessionStore : ILocalSessionStore
             if (content.Length == 0)
                 return null;
 
-            return JsonSerializer.Deserialize<TestSession>(
-                content, XpingSerializerOptions.FileOptions);
+            // Through SessionDocument, so pre-v1 files are upgraded and newer ones refused.
+            return SessionDocument.Read(content);
         }
         // JsonException covers a truncated or malformed document, InvalidDataException a corrupt
         // gzip container. Without these a single damaged file would abort the whole read instead of
         // costing one session, which is the opposite of what the store contract promises.
         catch (Exception ex) when (
-            StoreRetention.IsStorageFailure(ex) || ex is InvalidDataException or JsonException)
+            StoreRetention.IsStorageFailure(ex) || ex is InvalidDataException or JsonException or UnsupportedSchemaVersionException)
         {
             _logger.LogDebug("Skipping unreadable session file '{Path}': {Message}", path, ex.Message);
             return null;

@@ -33,7 +33,8 @@ public sealed class TestSession
         PullRequestContext = null;
         QuickStatistics = null;
         StatisticsByAssembly = null;
-        SdkVersion = XpingVersion.Current;
+        SchemaVersion = SessionSchema.CurrentVersion;
+        Producer = SessionProducer.ThisLibrary;
     }
 
     /// <summary>
@@ -61,7 +62,8 @@ public sealed class TestSession
         PullRequestContext = pullRequestContext;
         QuickStatistics = quickStatistics;
         StatisticsByAssembly = statisticsByAssembly;
-        SdkVersion = XpingVersion.Current;
+        SchemaVersion = SessionSchema.CurrentVersion;
+        Producer = SessionProducer.ThisLibrary;
     }
 
     /// <summary>
@@ -111,7 +113,7 @@ public sealed class TestSession
     /// without decompressing the executions behind it.
     /// </para>
     /// </remarks>
-    [JsonPropertyOrder(-1)]
+    [JsonPropertyOrder(-2)]
     public IReadOnlyList<string> Assemblies { get; init; }
 
     /// <summary>
@@ -155,8 +157,12 @@ public sealed class TestSession
     public IReadOnlyDictionary<string, AssemblyStatistics>? StatisticsByAssembly { get; init; }
 
     /// <summary>
-    /// Gets the version of the Xping SDK that produced this session (e.g. <c>"1.2.3"</c>).
-    /// Automatically stamped from assembly metadata — no manual input required.
+    /// The schema version of <c>schema/session.schema.json</c> this session follows. Written right
+    /// after <see cref="Assemblies"/>, which stays first so the store can read it from the file head.
     /// </summary>
-    public string SdkVersion { get; init; }
+    [JsonPropertyOrder(-1)]
+    public int SchemaVersion { get; init; }
+
+    /// <summary>What wrote the session: the Xping SDK, an importer, or this library.</summary>
+    public SessionProducer Producer { get; init; }
 }
