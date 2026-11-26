@@ -248,7 +248,7 @@ Done: build config, 12 `src/` projects, 13 test projects, CLI command stubs, sch
 | Per-project tests are placeholders (marked `TODO(spec)`) | The stubs carry no behaviour yet. The CLI, exit-code, schema and module-boundary tests are real. |
 | `.xping.yml` sample and both schemas are drafts | The formats are not specified yet. |
 
-Open items: the conduct contact address (`CODE_OF_CONDUCT.md`), the Marketplace publisher ID (`integrations/azure-devops/vss-extension.json`), GitHub private vulnerability reporting must be enabled for `SECURITY.md` to work. The ADO `index.js` was not executed: Node is not installed on the dev machine.
+Open items: the Marketplace publisher ID (`integrations/azure-devops/vss-extension.json`), GitHub private vulnerability reporting must be enabled for `SECURITY.md` to work. The ADO `index.js` placeholder runs under Node and exits 69.
 
 ## 8. docs.xping.io switch steps
 

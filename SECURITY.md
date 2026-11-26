@@ -4,6 +4,8 @@
 
 Please **do not** open a public issue. Report it privately through GitHub: open the repository's **Security** tab and choose **Report a vulnerability**.
 
+If you cannot use GitHub, email adrian@xping.io.
+
 We acknowledge reports within 3 working days and keep you updated until a fix ships.
 
 ## Supported versions
