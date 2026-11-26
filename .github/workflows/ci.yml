@@ -41,8 +41,10 @@ jobs:
       - name: Build
         run: dotnet build Xping.slnx -c Release --no-restore
 
+      # Wall-clock performance budgets are calibrated on ubuntu-latest. The Windows runner is slower,
+      # and the budgets must not be loosened to fit it, so they are left out there only.
       - name: Test
-        run: dotnet test --solution Xping.slnx -c Release --no-build
+        run: dotnet test --solution Xping.slnx -c Release --no-build ${{ matrix.os == 'windows-latest' && '--filter-not-trait "Category=Performance"' || '' }}
 
   format:
     name: Format check

@@ -28,6 +28,9 @@ namespace Xping.Session.Tests.Store;
 /// </para>
 /// </remarks>
 [Collection("Sequential")]
+// Wall-clock budgets calibrated on ubuntu-latest, as in sdk-dotnet. CI runs them there only: the
+// Windows runner is slower and the budgets must not be loosened to fit it.
+[Trait("Category", "Performance")]
 public sealed class LocalStorePerformanceTests : IDisposable
 {
     private const int SuiteSize = 2000;
