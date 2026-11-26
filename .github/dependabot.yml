@@ -20,12 +20,20 @@ updates:
       test:
         patterns: ['xunit*', 'Moq', 'NSubstitute', 'WireMock.Net', 'AwesomeAssertions']
 
+  # Stay on the .NET 10 LTS line: patches and minors only. The move to the next LTS (.NET 12) is a
+  # deliberate change of global.json, the target framework and this base image together.
   - package-ecosystem: docker
     directory: /packaging/container
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: dotnet/runtime-deps
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: dotnet-sdk
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
