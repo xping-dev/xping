@@ -184,7 +184,7 @@ internal sealed class AzureDevOpsPullRequestDetector(
         if (string.Equals(uri.Host, "dev.azure.com", StringComparison.OrdinalIgnoreCase))
         {
             string organization = uri.AbsolutePath.Trim('/');
-            return organization.Length == 0 || organization.IndexOf('/') >= 0
+            return organization.Length == 0 || organization.Contains('/', StringComparison.Ordinal)
                 ? null
                 : new AzureCollection(AzureDevOpsServicesUrl, Uri.UnescapeDataString(organization));
         }
@@ -193,15 +193,15 @@ internal sealed class AzureDevOpsPullRequestDetector(
         if (uri.Host.EndsWith(legacySuffix, StringComparison.OrdinalIgnoreCase))
         {
             string organization = uri.Host.Substring(0, uri.Host.Length - legacySuffix.Length);
-            return organization.Length == 0 || organization.IndexOf('.') >= 0
+            return organization.Length == 0 || organization.Contains('.', StringComparison.Ordinal)
                 ? null
                 : new AzureCollection(AzureDevOpsServicesUrl, organization);
         }
 
         string path = uri.AbsolutePath.Trim('/');
         int lastSlash = path.LastIndexOf('/');
-        string name = Uri.UnescapeDataString(path.Substring(lastSlash + 1));
-        string serverPath = lastSlash < 0 ? string.Empty : "/" + path.Substring(0, lastSlash);
+        string name = Uri.UnescapeDataString(path.AsSpan(lastSlash + 1));
+        string serverPath = lastSlash < 0 ? string.Empty : string.Concat("/", path.AsSpan(0, lastSlash));
         if (name.Length == 0
             || !PullRequestEnvironment.TryGetServerRoot(collectionUri, out string? serverRoot))
             return null;

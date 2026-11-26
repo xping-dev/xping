@@ -5,9 +5,7 @@
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
 using Moq;
-using Xping.Sdk.Core.Configuration;
 using Xping.Session.Models.Environments;
 using Xping.Providers.Environment;
 using Xping.Providers.Environment.Internals;
@@ -71,7 +69,7 @@ public sealed class EnvironmentDetectorTests
     {
         _env["GITHUB_ACTIONS"] = "true";
 
-        IEnvironmentDetector detector = CreateDetector(new XpingConfiguration
+        IEnvironmentDetector detector = CreateDetector(new EnvironmentDetectorOptions
         {
             Environment = "Staging",
         });
@@ -414,7 +412,7 @@ public sealed class EnvironmentDetectorTests
         _env[actorVariable] = "janedev";
         _env[emailVariable] = "jane@example.com";
 
-        IEnvironmentDetector detector = CreateDetector(new XpingConfiguration { CollectCiActorEmail = true });
+        IEnvironmentDetector detector = CreateDetector(new EnvironmentDetectorOptions { CollectCiActorEmail = true });
 
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 
@@ -446,7 +444,7 @@ public sealed class EnvironmentDetectorTests
         _env["GITLAB_CI"] = "true";
         _env["GITLAB_USER_EMAIL"] = "jane@example.com";
 
-        IEnvironmentDetector detector = CreateDetector(new XpingConfiguration { CollectCiActorEmail = true });
+        IEnvironmentDetector detector = CreateDetector(new EnvironmentDetectorOptions { CollectCiActorEmail = true });
 
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 
@@ -468,7 +466,7 @@ public sealed class EnvironmentDetectorTests
         _env["BUILD_REQUESTEDFOREMAIL"] = "build@example.com";
 
         // Collection is on, so only the service-identity check can keep the email out.
-        IEnvironmentDetector detector = CreateDetector(new XpingConfiguration { CollectCiActorEmail = true });
+        IEnvironmentDetector detector = CreateDetector(new EnvironmentDetectorOptions { CollectCiActorEmail = true });
 
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 
@@ -752,7 +750,7 @@ public sealed class EnvironmentDetectorTests
         var logger = new LevelRecordingLogger<EnvironmentDetector>();
 
         EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector(
-            new XpingConfiguration { DefaultBranch = "release" }, logger: logger)).BuildEnvironmentInfoAsync();
+            new EnvironmentDetectorOptions { DefaultBranch = "release" }, logger: logger)).BuildEnvironmentInfoAsync();
 
         Assert.Equal("release", info.CustomProperties["CI.DefaultBranch"]);
         Assert.Single(logger.Levels, LogLevel.Warning);
@@ -770,7 +768,7 @@ public sealed class EnvironmentDetectorTests
         _env["GITHUB_EVENT_PATH"] = eventPath;
 
         EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector(
-            new XpingConfiguration { DefaultBranch = "main" })).BuildEnvironmentInfoAsync();
+            new EnvironmentDetectorOptions { DefaultBranch = "main" })).BuildEnvironmentInfoAsync();
 
         Assert.Equal("main", info.CustomProperties["CI.DefaultBranch"]);
     }
@@ -783,7 +781,7 @@ public sealed class EnvironmentDetectorTests
         _env[variable] = value;
 
         EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector(
-            new XpingConfiguration { DefaultBranch = "develop" })).BuildEnvironmentInfoAsync();
+            new EnvironmentDetectorOptions { DefaultBranch = "develop" })).BuildEnvironmentInfoAsync();
 
         Assert.Equal("develop", info.CustomProperties["CI.DefaultBranch"]);
     }
@@ -801,7 +799,7 @@ public sealed class EnvironmentDetectorTests
         _env["GIT_BRANCH"] = "origin/main";
 
         EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector(
-            new XpingConfiguration { DefaultBranch = defaultBranch })).BuildEnvironmentInfoAsync();
+            new EnvironmentDetectorOptions { DefaultBranch = defaultBranch })).BuildEnvironmentInfoAsync();
 
         Assert.Equal(expected, info.CustomProperties["CI.DefaultBranch"]);
     }
@@ -813,7 +811,7 @@ public sealed class EnvironmentDetectorTests
         _env["GIT_BRANCH"] = "origin/main";
 
         EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector(
-            new XpingConfiguration { DefaultBranch = "origin/main" })).BuildEnvironmentInfoAsync();
+            new EnvironmentDetectorOptions { DefaultBranch = "origin/main" })).BuildEnvironmentInfoAsync();
 
         Assert.Equal(info.CustomProperties["CI.Branch"], info.CustomProperties["CI.DefaultBranch"]);
     }
@@ -822,7 +820,7 @@ public sealed class EnvironmentDetectorTests
     public async Task TheConfiguredDefaultBranchIsNotSentOutsideCi()
     {
         EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector(
-            new XpingConfiguration { DefaultBranch = "develop" })).BuildEnvironmentInfoAsync();
+            new EnvironmentDetectorOptions { DefaultBranch = "develop" })).BuildEnvironmentInfoAsync();
 
         Assert.False(info.CustomProperties.ContainsKey("CI.DefaultBranch"));
     }
@@ -836,7 +834,7 @@ public sealed class EnvironmentDetectorTests
         _env["CI_DEFAULT_BRANCH"] = "develop";
 
         EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector(
-            new XpingConfiguration { DefaultBranch = defaultBranch })).BuildEnvironmentInfoAsync();
+            new EnvironmentDetectorOptions { DefaultBranch = defaultBranch })).BuildEnvironmentInfoAsync();
 
         Assert.Equal("develop", info.CustomProperties["CI.DefaultBranch"]);
     }
@@ -849,7 +847,7 @@ public sealed class EnvironmentDetectorTests
         var logger = new LevelRecordingLogger<EnvironmentDetector>();
 
         EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector(
-            new XpingConfiguration { DefaultBranch = "develop" }, logger: logger)).BuildEnvironmentInfoAsync();
+            new EnvironmentDetectorOptions { DefaultBranch = "develop" }, logger: logger)).BuildEnvironmentInfoAsync();
 
         Assert.Equal("develop", info.CustomProperties["CI.DefaultBranch"]);
         Assert.Empty(logger.Levels);
@@ -863,7 +861,7 @@ public sealed class EnvironmentDetectorTests
         var logger = new LevelRecordingLogger<EnvironmentDetector> { ThrowOnLog = true };
 
         EnvironmentInfo info = await ((IEnvironmentDetector)CreateDetector(
-            new XpingConfiguration { DefaultBranch = "release" }, logger: logger)).BuildEnvironmentInfoAsync();
+            new EnvironmentDetectorOptions { DefaultBranch = "release" }, logger: logger)).BuildEnvironmentInfoAsync();
 
         Assert.Equal("release", info.CustomProperties["CI.DefaultBranch"]);
     }
@@ -987,7 +985,7 @@ public sealed class EnvironmentDetectorTests
         tempGit.WriteConfig("[user]\n\tname = Jane Doe\n\temail = jane@example.com\n");
         using var dirRestorer = new WorkingDirectoryRestorer(tempGit.WorkingDirectory);
 
-        IEnvironmentDetector detector = CreateDetector(new XpingConfiguration { CollectLocalGitAuthor = true });
+        IEnvironmentDetector detector = CreateDetector(new EnvironmentDetectorOptions { CollectLocalGitAuthor = true });
         EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 
         Assert.Equal("Jane Doe", info.CustomProperties["Git.Actor"]);
@@ -1012,7 +1010,7 @@ public sealed class EnvironmentDetectorTests
                 "[user]\n\tname = Global Author\n\temail = global@example.com\n");
             _env["HOME"] = tempHome;
 
-            IEnvironmentDetector detector = CreateDetector(new XpingConfiguration { CollectLocalGitAuthor = true });
+            IEnvironmentDetector detector = CreateDetector(new EnvironmentDetectorOptions { CollectLocalGitAuthor = true });
             EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 
             Assert.Equal("Global Author", info.CustomProperties["Git.Actor"]);
@@ -1043,7 +1041,7 @@ public sealed class EnvironmentDetectorTests
             _env["HOME"] = home;
             _env["XDG_CONFIG_HOME"] = xdg;
 
-            IEnvironmentDetector detector = CreateDetector(new XpingConfiguration { CollectLocalGitAuthor = true });
+            IEnvironmentDetector detector = CreateDetector(new EnvironmentDetectorOptions { CollectLocalGitAuthor = true });
             EnvironmentInfo info = await detector.BuildEnvironmentInfoAsync();
 
             Assert.Equal("Xdg Author", info.CustomProperties["Git.Actor"]);
@@ -1279,7 +1277,7 @@ public sealed class EnvironmentDetectorTests
         _env["GITHUB_ACTIONS"] = "true";
         var logger = new LevelRecordingLogger<EnvironmentDetector>();
         IEnvironmentDetector detector = CreateDetector(
-            new XpingConfiguration { EnablePullRequestDetection = false }, logger: logger);
+            new EnvironmentDetectorOptions { EnablePullRequestDetection = false }, logger: logger);
 
         await detector.BuildEnvironmentInfoAsync();
 
@@ -1334,12 +1332,12 @@ public sealed class EnvironmentDetectorTests
     }
 
     private EnvironmentDetector CreateDetector(
-        XpingConfiguration? configuration = null,
+        EnvironmentDetectorOptions? configuration = null,
         IEnvironmentVariableProvider? env = null,
         ILogger<EnvironmentDetector>? logger = null)
     {
         return new EnvironmentDetector(
-            Options.Create(configuration ?? new XpingConfiguration()),
+            configuration ?? new EnvironmentDetectorOptions(),
             new XpingJsonSerializer(XpingSerializerOptions.FileOptions),
             env ?? _env,
             logger ?? NullLogger<EnvironmentDetector>.Instance);

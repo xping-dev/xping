@@ -6,8 +6,6 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
-using Xping.Sdk.Core.Configuration;
 using Xping.Session.Models.Builders;
 using Xping.Session.Models.Environments;
 using Xping.Providers.PullRequest.Internals;
@@ -22,7 +20,7 @@ namespace Xping.Providers.Environment.Internals;
 /// </summary>
 internal sealed class EnvironmentDetector : IEnvironmentDetector
 {
-    private readonly XpingConfiguration _configuration;
+    private readonly EnvironmentDetectorOptions _configuration;
     private readonly IXpingSerializer _serializer;
     private readonly IEnvironmentVariableProvider _env;
     private readonly ILogger<EnvironmentDetector> _logger;
@@ -46,12 +44,12 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     /// Initializes a new instance of the <see cref="EnvironmentDetector"/> class.
     /// </summary>
     public EnvironmentDetector(
-        IOptions<XpingConfiguration> options,
+        EnvironmentDetectorOptions options,
         IXpingSerializer serializer,
         IEnvironmentVariableProvider env,
         ILogger<EnvironmentDetector> logger)
     {
-        _configuration = options.Value;
+        _configuration = options;
         _serializer = serializer;
         _env = env;
         _logger = logger;
@@ -172,15 +170,15 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
 
             // Check for mobile platforms first (they can report as Unix/Linux)
             // Android detection
-            if (description.IndexOf("Android", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (description.Contains("Android", StringComparison.OrdinalIgnoreCase))
             {
                 return $"Android ({description})";
             }
 
             // iOS detection
-            if (description.IndexOf("iOS", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                description.IndexOf("iPhone", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                description.IndexOf("iPad", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (description.Contains("iOS", StringComparison.OrdinalIgnoreCase) ||
+                description.Contains("iPhone", StringComparison.OrdinalIgnoreCase) ||
+                description.Contains("iPad", StringComparison.OrdinalIgnoreCase))
             {
                 return $"iOS ({description})";
             }
@@ -231,10 +229,10 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
             string? frameworkDescription = RuntimeInformation.FrameworkDescription;
 
             // Check for mobile-specific frameworks first
-            if (operatingSystem.IndexOf("Android", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (operatingSystem.Contains("Android", StringComparison.OrdinalIgnoreCase))
             {
                 // .NET for Android (formerly Xamarin.Android)
-                if (frameworkDescription.IndexOf("Android", StringComparison.OrdinalIgnoreCase) >= 0)
+                if (frameworkDescription.Contains("Android", StringComparison.OrdinalIgnoreCase))
                 {
                     return frameworkDescription; // Return full description like ".NET 9.0-android"
                 }
@@ -242,12 +240,12 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                 return $".NET for Android ({frameworkDescription})";
             }
 
-            if (operatingSystem.IndexOf("iOS", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                operatingSystem.IndexOf("iPhone", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                operatingSystem.IndexOf("iPad", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (operatingSystem.Contains("iOS", StringComparison.OrdinalIgnoreCase) ||
+                operatingSystem.Contains("iPhone", StringComparison.OrdinalIgnoreCase) ||
+                operatingSystem.Contains("iPad", StringComparison.OrdinalIgnoreCase))
             {
                 // .NET for iOS (formerly Xamarin.iOS)
-                if (frameworkDescription.IndexOf("iOS", StringComparison.OrdinalIgnoreCase) >= 0)
+                if (frameworkDescription.Contains("iOS", StringComparison.OrdinalIgnoreCase))
                 {
                     return frameworkDescription; // Return a full description like ".NET 9.0-ios"
                 }
@@ -256,19 +254,19 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
             }
 
             // Desktop frameworks
-            if (frameworkDescription.IndexOf(".NET Framework", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (frameworkDescription.Contains(".NET Framework", StringComparison.OrdinalIgnoreCase))
             {
                 return ".NET Framework";
             }
-            if (frameworkDescription.IndexOf(".NET Core", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (frameworkDescription.Contains(".NET Core", StringComparison.OrdinalIgnoreCase))
             {
                 return ".NET Core";
             }
-            if (frameworkDescription.IndexOf(".NET Native", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (frameworkDescription.Contains(".NET Native", StringComparison.OrdinalIgnoreCase))
             {
                 return ".NET Native";
             }
-            if (frameworkDescription.IndexOf(".NET", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (frameworkDescription.Contains(".NET", StringComparison.OrdinalIgnoreCase))
             {
                 // Modern .NET (5+)
                 return ".NET";
@@ -369,8 +367,8 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                 if (File.Exists("/proc/1/cgroup"))
                 {
                     string cgroupContent = File.ReadAllText("/proc/1/cgroup");
-                    if (cgroupContent.IndexOf("docker", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                        cgroupContent.IndexOf("kubepods", StringComparison.OrdinalIgnoreCase) >= 0)
+                    if (cgroupContent.Contains("docker", StringComparison.OrdinalIgnoreCase) ||
+                        cgroupContent.Contains("kubepods", StringComparison.OrdinalIgnoreCase))
                     {
                         return true;
                     }
@@ -390,7 +388,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         Dictionary<string, string> properties = new()
         {
             // Where the run happened, which is a different question from the environment name and
-            // is why these are literals rather than XpingConfiguration.DefaultEnvironment. The
+            // is why these are literals rather than EnvironmentDetectorOptions.DefaultEnvironment. The
             // environment name no longer carries the CI-vs-local distinction; this property and
             // IsCIEnvironment do, diagnostically.
             ["ExecutionContext"] = ciPlatform.HasValue ? "CI" : "Local"
@@ -419,36 +417,36 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
         }
 
         // Add mobile platform detection
-        if (operatingSystem.IndexOf("Android", StringComparison.OrdinalIgnoreCase) >= 0)
+        if (operatingSystem.Contains("Android", StringComparison.OrdinalIgnoreCase))
         {
             properties["Platform"] = "Android";
             properties["IsMobile"] = "true";
         }
-        else if (operatingSystem.IndexOf("iOS", StringComparison.OrdinalIgnoreCase) >= 0)
+        else if (operatingSystem.Contains("iOS", StringComparison.OrdinalIgnoreCase))
         {
             properties["Platform"] = "iOS";
             properties["IsMobile"] = "true";
 
             // Distinguish between iPhone and iPad
-            if (operatingSystem.IndexOf("iPad", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (operatingSystem.Contains("iPad", StringComparison.OrdinalIgnoreCase))
             {
                 properties["DeviceType"] = "iPad";
             }
-            else if (operatingSystem.IndexOf("iPhone", StringComparison.OrdinalIgnoreCase) >= 0)
+            else if (operatingSystem.Contains("iPhone", StringComparison.OrdinalIgnoreCase))
             {
                 properties["DeviceType"] = "iPhone";
             }
         }
-        else if (operatingSystem.IndexOf("Windows", StringComparison.OrdinalIgnoreCase) >= 0)
+        else if (operatingSystem.Contains("Windows", StringComparison.OrdinalIgnoreCase))
         {
             properties["Platform"] = "Windows";
         }
-        else if (operatingSystem.IndexOf("Linux", StringComparison.OrdinalIgnoreCase) >= 0)
+        else if (operatingSystem.Contains("Linux", StringComparison.OrdinalIgnoreCase))
         {
             properties["Platform"] = "Linux";
         }
-        else if (operatingSystem.IndexOf("macOS", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                 operatingSystem.IndexOf("OSX", StringComparison.OrdinalIgnoreCase) >= 0)
+        else if (operatingSystem.Contains("macOS", StringComparison.OrdinalIgnoreCase) ||
+                 operatingSystem.Contains("OSX", StringComparison.OrdinalIgnoreCase))
         {
             properties["Platform"] = "macOS";
         }
@@ -515,7 +513,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     AddIfNotNull(properties, "CI.CommitSha", GetVariable("GIT_COMMIT"));
                     // CHANGE_ID comes from the Branch Source plugin, ghprbPullId from GHPRB (flagged, but no PR
                     // context is detected for it). A job built by any other PR plugin reads as a push build.
-                    bool isBranchSourcePullRequest = JenkinsPullRequestDetector.IsPullRequestBuild(GetVariable);
+                    bool isBranchSourcePullRequest = !string.IsNullOrEmpty(GetVariable("CHANGE_ID"));
                     bool isGhprbPullRequest = HasValue("ghprbPullId");
                     AddPullRequestFlag(properties, isBranchSourcePullRequest || isGhprbPullRequest);
                     AddIfNotNull(properties, "CI.GitBranch", GetVariable("GIT_BRANCH"));
@@ -747,7 +745,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                 {
                     if (line.EndsWith(target, StringComparison.Ordinal))
                     {
-                        int spaceIndex = line.IndexOf(' ');
+                        int spaceIndex = line.IndexOf(' ', StringComparison.Ordinal);
                         if (spaceIndex > 0)
                         {
                             return line.Substring(0, spaceIndex);
@@ -811,14 +809,14 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
                     continue;
                 }
 
-                if (trimmed.StartsWith("[", StringComparison.Ordinal) && inUserSection)
+                if (trimmed.StartsWith('[') && inUserSection)
                 {
                     break;
                 }
 
                 if (inUserSection)
                 {
-                    int eqIndex = trimmed.IndexOf('=');
+                    int eqIndex = trimmed.IndexOf('=', StringComparison.Ordinal);
                     if (eqIndex < 0)
                     {
                         continue;
@@ -907,7 +905,7 @@ internal sealed class EnvironmentDetector : IEnvironmentDetector
     // "Project Collection Build Service (org)" and "<Project> Build Service (org)".
     private static bool IsAzureServiceIdentity(string requestedFor) =>
         string.Equals(requestedFor.Trim(), "Microsoft.VisualStudio.Services.TFS", StringComparison.OrdinalIgnoreCase)
-        || requestedFor.IndexOf(" Build Service (", StringComparison.OrdinalIgnoreCase) >= 0;
+        || requestedFor.Contains(" Build Service (", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsValidSha(string value)
     {

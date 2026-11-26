@@ -81,7 +81,7 @@ internal sealed class GitRepositoryReader : IGitRepositoryReader
             if (line.Length == 0 || line[0] == '#' || line[0] == '^')
                 continue;
 
-            int space = line.IndexOf(' ');
+            int space = line.IndexOf(' ', StringComparison.Ordinal);
             if (space > 0 && string.Equals(line.Substring(space + 1), refName, StringComparison.Ordinal))
             {
                 string sha = line.Substring(0, space);
@@ -220,9 +220,9 @@ internal sealed class GitRepositoryReader : IGitRepositoryReader
     private static bool IsSafeRefName(string refName) =>
         refName.StartsWith("refs/", StringComparison.Ordinal)
         && refName.IndexOf("..", StringComparison.Ordinal) < 0
-        && refName.IndexOf('\\') < 0
-        && refName.IndexOf(':') < 0
-        && refName.IndexOf('\0') < 0;
+        && refName.IndexOf('\\', StringComparison.Ordinal) < 0
+        && refName.IndexOf(':', StringComparison.Ordinal) < 0
+        && refName.IndexOf('\0', StringComparison.Ordinal) < 0;
 
     /// <summary>A SHA-1 (40) or SHA-256 (64) object name in hex.</summary>
     internal static bool IsSha(string value)

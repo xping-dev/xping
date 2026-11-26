@@ -4,4 +4,8 @@
     <ProjectReference Include="..\..\src\Xping.Providers.Abstractions\Xping.Providers.Abstractions.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Moq" />
+  </ItemGroup>
+
 </Project>

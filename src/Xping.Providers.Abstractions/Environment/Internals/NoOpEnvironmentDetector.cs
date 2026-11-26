@@ -3,7 +3,6 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Configuration;
 using Xping.Session.Models.Environments;
 
 namespace Xping.Providers.Environment.Internals;
@@ -39,7 +38,7 @@ internal sealed class NoOpEnvironmentDetector : IEnvironmentDetector
         new Dictionary<string, string>();
 
     /// <inheritdoc/>
-    public string EnvironmentName => XpingConfiguration.DefaultEnvironment;
+    public string EnvironmentName => EnvironmentDetectorOptions.DefaultEnvironment;
 
     /// <inheritdoc/>
     public Task<EnvironmentInfo> BuildEnvironmentInfoAsync(
