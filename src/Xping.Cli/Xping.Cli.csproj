@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- The executable is `xping`; System.CommandLine also takes the name shown in help from it. -->
+    <AssemblyName>xping</AssemblyName>
+    <RootNamespace>Xping.Cli</RootNamespace>
+    <Description>Xping: detects when tests are weakened (assertions removed, timeouts loosened, tests skipped, class under test mocked) and backs findings with execution history kept in your own repository. Runs entirely in your CI.</Description>
+    <IsPackable>true</IsPackable>
+    <PackageId>Xping.Cli</PackageId>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>xping</ToolCommandName>
+    <RollForward>Major</RollForward>
+  </PropertyGroup>
+
+  <!--
+    Self-contained single-file binaries, used when a runtime identifier is given:
+      dotnet publish src/Xping.Cli -c Release -r linux-x64
+    Not Native AOT and not trimmed: Roslyn relies on reflection.
+  -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <PublishAot>false</PublishAot>
+    <PublishTrimmed>false</PublishTrimmed>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Xping.Core\Xping.Core.csproj" />
+    <ProjectReference Include="..\Xping.Session\Xping.Session.csproj" />
+    <ProjectReference Include="..\Xping.Evidence\Xping.Evidence.csproj" />
+    <ProjectReference Include="..\Xping.History\Xping.History.csproj" />
+    <ProjectReference Include="..\Xping.Analyzers.CSharp\Xping.Analyzers.CSharp.csproj" />
+    <ProjectReference Include="..\Xping.Analyzers.TreeSitter\Xping.Analyzers.TreeSitter.csproj" />
+    <ProjectReference Include="..\Xping.Providers.Abstractions\Xping.Providers.Abstractions.csproj" />
+    <ProjectReference Include="..\Xping.Providers.GitHub\Xping.Providers.GitHub.csproj" />
+    <ProjectReference Include="..\Xping.Providers.GitLab\Xping.Providers.GitLab.csproj" />
+    <ProjectReference Include="..\Xping.Providers.AzureDevOps\Xping.Providers.AzureDevOps.csproj" />
+    <ProjectReference Include="..\Xping.Reporters\Xping.Reporters.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Xping.Cli.Tests" />
+  </ItemGroup>
+
+</Project>
