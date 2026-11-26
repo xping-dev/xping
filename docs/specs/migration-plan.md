@@ -1,6 +1,6 @@
 # Migration plan: sdk-dotnet + dashboard → xping-dev/xping
 
-> Status: **Phase 1 decisions recorded (§6)** · 2026-11-26
+> Status: **Phase 2 done on `chore/scaffold` (§7)** · 2026-11-26
 > Source of truth: [`xping-redesign-prespec.md`](xping-redesign-prespec.md). (The task brief calls it `redesign-prespec.md`; the file in the repo is `xping-redesign-prespec.md`.)
 > This file will be updated through Phases 2–5 to show what was actually done, including deviations.
 
@@ -232,7 +232,23 @@ Recommendation: apply for **ID prefix reservation `Xping.*`** on nuget.org now. 
 
 ## 7. Deviations log
 
-_Filled in during Phases 2–5._
+### Phase 2: scaffold (branch `chore/scaffold`)
+
+Done: build config, 12 `src/` projects, 13 test projects, CLI command stubs, schema drafts, samples, Azure DevOps task skeleton, `ci.yml`, root docs. `dotnet build` (warnings as errors), `dotnet test` (61 tests) and `dotnet format --verify-no-changes` pass locally. `dotnet pack` produces `Xping.Cli` and `Xping.Session`. The tool installs and runs. `dotnet publish -r osx-arm64` produces one 34 MB `xping` file.
+
+| Deviation | Why |
+|---|---|
+| `release.yml` not created yet | Phase 4 defines it in full (SBOM, cosign, attestations). |
+| `docs/` holds only `specs/` and `reference/` | Q6: product docs go to a separate repo. |
+| `src/Shared/` not created yet | It arrives with the Phase 3 extraction. |
+| System.CommandLine **2.0.15**, not 3.0.0 | The migrated CLI plumbing is written against 2.0. Upgrade separately. |
+| Tests use **xUnit v3 on Microsoft.Testing.Platform** (`global.json` → `test.runner`) | xunit.v3 4.x requires MTP on the .NET 10 SDK. sdk-dotnet's tests are xUnit v2 + VSTest (+ Moq in Core tests), so Phase 3 ports them: mostly namespace and `ValueTask` changes. |
+| One version for every package (`2.0.0-alpha.1`), including the new `Xping.Session` | Keeps a single repository version. Only `Xping.Session` and `Xping.Cli` are packable for now. |
+| New exit-code table: 0, 1 blocked, 2 input error, 64 usage, 69 not implemented, 70 internal | The old CLI's 2 (insufficient data), 3 (not found) and 4 (ambiguous) belonged to `report`, which is dropped (Q3). |
+| Per-project tests are placeholders (marked `TODO(spec)`) | The stubs carry no behaviour yet. The CLI, exit-code, schema and module-boundary tests are real. |
+| `.xping.yml` sample and both schemas are drafts | The formats are not specified yet. |
+
+Open items: the conduct contact address (`CODE_OF_CONDUCT.md`), the Marketplace publisher ID (`integrations/azure-devops/vss-extension.json`), GitHub private vulnerability reporting must be enabled for `SECURITY.md` to work. The ADO `index.js` was not executed: Node is not installed on the dev machine.
 
 ## 8. docs.xping.io switch steps
 
