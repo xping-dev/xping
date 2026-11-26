@@ -1,0 +1,54 @@
+<Project>
+  <!-- Language and analysis: shared by every project in the repository. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>All</AnalysisMode>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <CodeAnalysisTreatWarningsAsErrors>true</CodeAnalysisTreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Same suppressions as sdk-dotnet, so migrated code builds unchanged. -->
+    <NoWarn>$(NoWarn);1701;1702;CA1010;CA1031;CA1056;CA1710;CA1711;CA1716;CA1848;CA1873</NoWarn>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true' OR '$(TF_BUILD)' == 'true' OR '$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+    <!-- Libraries are not published unless a project opts in (Xping.Session, Xping.Cli). -->
+    <IsPackable>false</IsPackable>
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+  </PropertyGroup>
+
+  <!-- One version for the whole repository. Override with -p:Version=... in the release workflow. -->
+  <PropertyGroup>
+    <VersionPrefix>2.0.0</VersionPrefix>
+    <VersionSuffix Condition="'$(VersionSuffix)' == ''">alpha.1</VersionSuffix>
+  </PropertyGroup>
+
+  <!-- Package metadata. -->
+  <PropertyGroup>
+    <Authors>Xping</Authors>
+    <Company>Xping</Company>
+    <Copyright>Copyright (c) Xping</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/xping-dev/xping</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/xping-dev/xping</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>testing;test-weakening;ci;code-review;agents</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PublishRepositoryUrl Condition="'$(ContinuousIntegrationBuild)' == 'true'">true</PublishRepositoryUrl>
+    <EmbedUntrackedSources Condition="'$(ContinuousIntegrationBuild)' == 'true'">true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <!-- Test projects: everything under tests/. -->
+  <PropertyGroup Condition="$([MSBuild]::MakeRelative('$(MSBuildThisFileDirectory)', '$(MSBuildProjectDirectory)').Replace('\', '/').StartsWith('tests/'))">
+    <IsTestProject>true</IsTestProject>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- CA1515: xUnit needs public test classes. CA1707: underscores in test names. CA2007: no ConfigureAwait in tests. -->
+    <NoWarn>$(NoWarn);CA1515;CA1707;CA2007</NoWarn>
+  </PropertyGroup>
+</Project>

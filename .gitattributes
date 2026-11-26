@@ -1,0 +1,12 @@
+###############################################################################
+# Set default behavior to automatically normalize line endings.
+###############################################################################
+* text=auto
+
+###############################################################################
+# Set default behavior for C# files
+#
+# C# files should always use LF line endings for cross-platform consistency
+###############################################################################
+*.cs text eol=lf
+*.csx text eol=lf
