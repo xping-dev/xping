@@ -486,3 +486,6 @@ $RECYCLE.BIN/
 artifacts/
 *.DotSettings.user
 .DS_Store
+
+# Binaries staged for a local container build
+packaging/container/linux-*/

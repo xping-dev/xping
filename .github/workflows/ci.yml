@@ -5,12 +5,14 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # The release workflow runs the same checks before it builds anything.
+  workflow_call:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -44,7 +46,13 @@ jobs:
       # Wall-clock performance budgets are calibrated on ubuntu-latest. The Windows runner is slower,
       # and the budgets must not be loosened to fit it, so they are left out there only.
       - name: Test
-        run: dotnet test --solution Xping.slnx -c Release --no-build ${{ matrix.os == 'windows-latest' && '--filter-not-trait "Category=Performance"' || '' }}
+        shell: bash
+        env:
+          OS: ${{ matrix.os }}
+        run: |
+          filter=()
+          if [ "$OS" = "windows-latest" ]; then filter=(--filter-not-trait "Category=Performance"); fi
+          dotnet test --solution Xping.slnx -c Release --no-build "${filter[@]}"
 
   format:
     name: Format check
