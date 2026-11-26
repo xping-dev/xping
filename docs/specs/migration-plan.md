@@ -1,6 +1,6 @@
 # Migration plan: sdk-dotnet + dashboard → xping-dev/xping
 
-> Status: **Phase 2 done on `chore/scaffold` (§7)** · 2026-11-26
+> Status: **Phase 3 done on `migrate/sdk-dotnet` (§7)** · 2026-11-26
 > Source of truth: [`xping-redesign-prespec.md`](xping-redesign-prespec.md). (The task brief calls it `redesign-prespec.md`; the file in the repo is `xping-redesign-prespec.md`.)
 > This file will be updated through Phases 2–5 to show what was actually done, including deviations.
 
@@ -85,7 +85,7 @@ git clone --no-tags --single-branch --branch main git@github.com:xping-dev/sdk-d
 cd "$WORK" && git reset --hard "$SRC_SHA"
 ```
 
-**Pass 1: keep and rename** (`$WORK/../sdk-paths.txt`; `old==>new` keeps the path and renames it):
+**Pass 1: keep and rename** (`$WORK/../sdk-paths.txt`). As run: git-filter-repo a40bce548d2c treats an `old==>new` line as a rename only, so the file also lists every left-hand path as a plain include line (prepended; not repeated below).
 
 ```text
 # --- Xping.Session ---
@@ -249,6 +249,36 @@ Done: build config, 12 `src/` projects, 13 test projects, CLI command stubs, sch
 | `.xping.yml` sample and both schemas are drafts | The formats are not specified yet. |
 
 Open items: the Marketplace publisher ID (`integrations/azure-devops/vss-extension.json`), GitHub private vulnerability reporting must be enabled for `SECURITY.md` to work. The ADO `index.js` placeholder runs under Node and exits 69.
+
+### Phase 3: migrate (branch `migrate/sdk-dotnet`, stacked on `chore/scaffold`)
+
+Done:
+- **Extraction** as in §2 (both passes), 131 commits merged with `--allow-unrelated-histories`. Commit maps (original → pass 1 → pass 2) are in `docs/specs/provenance/`. Imported messages carry `Migrated-From: xping-dev/sdk-dotnet` and link PRs as `xping-dev/sdk-dotnet#N`. Commits before 2026-01-02 come along where the kept paths existed in the old web-testing SDK.
+- **Dashboard copies:** four commits, each naming `xping-dev/dashboard@f250a6e` and the files. Headers say so too.
+- **Cuts** (§3): no `Xping.Sdk.*` reference, no Cloud configuration, auth, uploader, `ApiOptions`, `Mode`/`ProjectId`/`IsConnected`, Polly, `PublicOnlyConnect` or GitHub App auth. `NoCloudDependencyTests` enforces it on the package graph, the sources and the shipped assemblies. It was checked by planting a Cloud URL, which made it fail.
+- **Session format:** `schemaVersion` + `producer` in model and schema. `SessionDocument` reads every version: v0 goes through `LegacySessionImporter`, newer versions are refused. Covered with the embedded early-SDK file and an rc.8-style file.
+- **Headers:** every `.cs` file has the SPDX MIT header.
+- **Result:** build has 0 warnings (Debug and Release), 2117 tests pass, the format check is clean.
+
+| Deviation | Why |
+|---|---|
+| `Xping.Session` is **netstandard2.0 only** (not + net10.0) | The migrated code is netstandard2.0 code; a net10.0 build demands APIs (span overloads, `ThrowIfNull`, `HashData`) netstandard2.0 lacks. The CLI consumes netstandard2.0 fine. |
+| Environment and PR detection stay in `Providers.Abstractions`, not split per provider | `EnvironmentDetector` calls the concrete GitHub/GitLab/ADO detectors directly. Splitting needs the provider adapter design (TODO(spec)), not a file move. |
+| The comment clients use `IHttpClientFactory`; nothing registers the named clients yet | Registration belongs to the PrComment reporter (TODO(spec)). |
+| `Cli/Configuration` deleted rather than migrated | It held only `CloudUrl`, `ApiKey` and `ProjectId`. `.xping.yml` is a Core TODO(spec). |
+| `TestNames` (from `Contract/SubjectNames.cs`) and `Redaction` (from `Auth/Redaction.cs`) are **copied**, not moved with history | Their folders were purged from history in pass 2; one file each was still needed. Their headers name the source. |
+| Tests dropped with the code they tested | The report renderers, envelope and goldens; the `report`/`where`/`clear` commands and CTA throttle; SDK orchestrator, DI and attribute tests; `XpingModeValidation`; GitHub App credential tests; the live ADO content-limit probe. The triage provider tests that asserted through the envelope JSON (headlines, byte-identical output, sibling ordering) are removed too. Determinism of the triage engine has no test now: re-add one when XP005 defines its output. |
+| `--version` prints clean SemVer (`2.0.0-alpha.1`), not `+sha` | Kept from the old CLI. |
+| New exit code **130 Cancelled** | Kept from the old CLI (it was an auth-only code there). |
+| Test packages: Moq, NSubstitute, WireMock.Net, AwesomeAssertions, TimeProvider.Testing | Used by the migrated tests. AwesomeAssertions (Apache-2.0) replaces FluentAssertions, whose v8+ is commercial. |
+| `xUnit1051` and `CA1859` suppressed in tests | The migrated tests predate xUnit v3's cancellation token and call internals through interfaces on purpose. |
+| `CA1812` off for `src/Xping.Core/Triage/**` | Nothing composes the triage engine until XP005. TODO(spec) in `.editorconfig`. |
+| `LocalStorePerformanceTests` (`Category=Performance`) do not run on the Windows CI job | Their wall-clock budgets were calibrated on ubuntu (sdk-dotnet's CI was ubuntu-only); a read took 5129 ms against 5000 ms on windows-latest. The budgets are unchanged and enforced on ubuntu. |
+| Calibration (Monte Carlo) tests run in every CI build | The whole Core suite takes ~20 s; sdk-dotnet ran them nightly only. |
+
+Follow-ups:
+- Many migrated comments still explain choices in terms of Xping Cloud. They are harmless, but should be reworded as the code is touched.
+- `ReportGlyphs` / `TerminalText` are kept for the future text reporter and are unused today.
 
 ## 8. docs.xping.io switch steps
 

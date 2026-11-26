@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Xping
+
+namespace Xping.Providers.PullRequest.Internals;
+
+/// <summary>
+/// Marker interface for platform-specific pull request detectors (GitHub, GitLab, Azure DevOps, etc.).
+/// Implementations are consumed exclusively by <see cref="CompositePullRequestContextDetector"/>;
+/// external code depends on <see cref="IPullRequestContextDetector"/> instead.
+/// </summary>
+internal interface IPlatformPullRequestDetector : IPullRequestContextDetector
+{
+}

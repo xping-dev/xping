@@ -2,11 +2,33 @@
 
   <PropertyGroup>
     <Description>Canonical Xping session schema: test runs, executions, identity and environment, plus the local session store. Shared by the Xping CLI and the Xping SDK.</Description>
-    <!-- netstandard2.0 so the Xping SDK (netstandard2.0) can depend on this package. -->
-    <TargetFramework />
-    <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
+    <!-- netstandard2.0 so the Xping SDK (netstandard2.0) can depend on this package. Only that
+         target: a net10.0 build would demand APIs netstandard2.0 lacks (span overloads,
+         ThrowIfNull, HashData) for no gain. -->
+    <TargetFramework>netstandard2.0</TargetFramework>
     <IsPackable>true</IsPackable>
     <PackageId>Xping.Session</PackageId>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Shared\*.cs" Link="Shared\%(Filename)%(Extension)" />
+    <Compile Include="..\Shared\Polyfills\*.cs" Link="Shared\Polyfills\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="System.Text.Json" />
+    <PackageReference Include="System.Reflection.Metadata" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Xping.Session.Tests" />
+    <InternalsVisibleTo Include="Xping.Core" />
+    <InternalsVisibleTo Include="Xping.Core.Tests" />
+    <InternalsVisibleTo Include="Xping.Providers.Abstractions" />
+    <InternalsVisibleTo Include="Xping.Providers.Abstractions.Tests" />
+    <InternalsVisibleTo Include="xping" />
+    <InternalsVisibleTo Include="Xping.Cli.Tests" />
+  </ItemGroup>
 
 </Project>

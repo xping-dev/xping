@@ -4,4 +4,11 @@
     <ProjectReference Include="..\..\src\Xping.Providers.GitLab\Xping.Providers.GitLab.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="AwesomeAssertions" />
+    <PackageReference Include="NSubstitute" />
+    <PackageReference Include="WireMock.Net" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+  </ItemGroup>
+
 </Project>

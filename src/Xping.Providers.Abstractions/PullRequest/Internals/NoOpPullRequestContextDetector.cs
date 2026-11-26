@@ -1,0 +1,17 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Xping
+
+using Xping.Session.Models.PullRequests;
+
+namespace Xping.Providers.PullRequest.Internals;
+
+/// <summary>
+/// A no-op implementation of <see cref="IPullRequestContextDetector"/> used when the SDK
+/// is disabled, configuration validation fails, or PR detection is turned off.
+/// Always returns <c>null</c>, suppressing all PR integration behaviour.
+/// </summary>
+internal sealed class NoOpPullRequestContextDetector : IPullRequestContextDetector
+{
+    /// <inheritdoc/>
+    public PullRequestContext? Detect() => null;
+}

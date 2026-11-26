@@ -1,0 +1,26 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Xping
+
+namespace Xping.Session.Models.Executions;
+
+/// <summary>
+/// A captured snapshot of a completed test, retained per worker to provide the preceding test context
+/// for the next execution on that worker.
+/// </summary>
+public sealed class PrecedingTestRecord
+{
+    /// <summary>
+    /// Gets or sets the stable test identifier.
+    /// </summary>
+    public string TestFingerprint { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the test display name.
+    /// </summary>
+    public string TestName { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the test outcome.
+    /// </summary>
+    public TestOutcome Outcome { get; init; }
+}

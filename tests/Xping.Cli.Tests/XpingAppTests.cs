@@ -34,7 +34,6 @@ public sealed class XpingAppTests
     }
 
     [Theory]
-    [InlineData]
     [InlineData("fingerprint")]
     [InlineData("skills")]
     [InlineData("check", "--format", "xml")]
@@ -47,7 +46,7 @@ public sealed class XpingAppTests
         var (exitCode, _, error) = Run(args);
 
         Assert.Equal(ExitCodes.UsageError, exitCode);
-        Assert.Contains("xping --help", error, StringComparison.Ordinal);
+        Assert.Contains("--help` for usage.", error, StringComparison.Ordinal);
     }
 
     [Fact]

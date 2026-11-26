@@ -1,0 +1,141 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Xping
+
+using System.Text;
+
+namespace Xping.Cli.Reporting;
+
+/// <summary>
+/// The character set used to draw the report, matched to what the terminal can actually render.
+/// </summary>
+/// <remarks>
+/// Windows conhost still defaults to code page 437 in some configurations, and a box-drawing
+/// character there renders as mojibake. Degrading to ASCII keeps the report legible instead of
+/// turning it into visual noise.
+/// </remarks>
+internal sealed class ReportGlyphs
+{
+    /// <summary>Unicode glyphs for terminals that can render them.</summary>
+    public static ReportGlyphs Unicode { get; } = new()
+    {
+        HorizontalRule = '─',   // ─
+        Pass = "✓",             // ✓
+        Fail = "✗",             // ✗
+        Skip = "○",             // ○
+        Warning = "⚠",          // ⚠
+        Pending = "◷",          // ◷
+        Separator = "·",        // ·
+        Arrow = "→",            // →
+        HistoryPass = '●',      // ●
+        HistoryFail = '○',      // ○
+        NotEqual = "≠",         // ≠
+        Down = "▼",             // ▼
+        Up = "▲",               // ▲
+        Dash = "—",             // —
+        Range = "–",            // –
+        Ellipsis = "…",         // …
+        Charset = TerminalCharset.Unicode
+    };
+
+    /// <summary>ASCII fallback for terminals that cannot.</summary>
+    public static ReportGlyphs Ascii { get; } = new()
+    {
+        HorizontalRule = '-',
+        Pass = "+",
+        Fail = "x",
+        Skip = "o",
+        Warning = "!",
+        Pending = "*",
+        Separator = "|",
+        Arrow = "->",
+        HistoryPass = '#',
+        HistoryFail = '.',
+        NotEqual = "!=",
+        Down = "v",
+        Up = "^",
+        Dash = "-",
+        Range = "-",
+        Ellipsis = "...",
+        Charset = TerminalCharset.Ascii
+    };
+
+    /// <summary>Gets the character used to draw horizontal rules.</summary>
+    public char HorizontalRule { get; private init; }
+
+    /// <summary>Gets the passed marker.</summary>
+    public string Pass { get; private init; } = "+";
+
+    /// <summary>Gets the failed marker.</summary>
+    public string Fail { get; private init; } = "x";
+
+    /// <summary>Gets the skipped marker.</summary>
+    public string Skip { get; private init; } = "o";
+
+    /// <summary>Gets the warning marker.</summary>
+    public string Warning { get; private init; } = "!";
+
+    /// <summary>Gets the in-progress marker.</summary>
+    public string Pending { get; private init; } = "*";
+
+    /// <summary>Gets the inline separator.</summary>
+    public string Separator { get; private init; } = "|";
+
+    /// <summary>Gets the arrow used for calls to action.</summary>
+    public string Arrow { get; private init; } = "->";
+
+    /// <summary>Gets the sparkline character for a passing run.</summary>
+    public char HistoryPass { get; private init; } = '#';
+
+    /// <summary>Gets the sparkline character for a failing run.</summary>
+    public char HistoryFail { get; private init; } = '.';
+
+    /// <summary>Gets the marker between a local and a Cloud label that disagree.</summary>
+    public string NotEqual { get; private init; } = "!=";
+
+    /// <summary>Gets the marker for a score that fell.</summary>
+    public string Down { get; private init; } = "v";
+
+    /// <summary>Gets the marker for a score that rose.</summary>
+    public string Up { get; private init; } = "^";
+
+    /// <summary>Gets what stands in an empty column.</summary>
+    public string Dash { get; private init; } = "-";
+
+    /// <summary>Gets the dash between the two ends of a range, as in <c>10–30%</c>.</summary>
+    public string Range { get; private init; } = "-";
+
+    /// <summary>Gets what ends a shortened value.</summary>
+    public string Ellipsis { get; private init; } = "...";
+
+    /// <summary>Gets what recorded text printed beside these glyphs may keep.</summary>
+    public TerminalCharset Charset { get; private init; } = TerminalCharset.Ascii;
+
+    /// <summary>
+    /// Selects a glyph set for the current console.
+    /// </summary>
+    /// <returns><see cref="Unicode"/> when the output encoding supports it, otherwise <see cref="Ascii"/>.</returns>
+    public static ReportGlyphs Detect()
+    {
+        try
+        {
+            Encoding encoding = Console.OutputEncoding;
+
+            bool unicodeCapable =
+                encoding.CodePage == 65001 ||            // UTF-8
+                encoding.CodePage == 1200 ||             // UTF-16 LE
+                encoding.CodePage == 1201 ||             // UTF-16 BE
+                encoding is UTF8Encoding or UnicodeEncoding;
+
+            return unicodeCapable ? Unicode : Ascii;
+        }
+        catch (IOException)
+        {
+            // No console attached; ASCII is the safe assumption for a redirected stream.
+            return Ascii;
+        }
+        catch (System.Security.SecurityException)
+        {
+            return Ascii;
+        }
+    }
+}

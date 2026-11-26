@@ -1,0 +1,64 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Xping
+
+namespace Xping.Core.Triage.Model;
+
+/// <summary>
+/// How much a finding deserves attention, banded from an impact score.
+/// </summary>
+/// <remarks>
+/// Declared most-severe-first so that ordinal comparison is severity comparison: sorting ascending
+/// puts <see cref="High"/> at the top, and <c>severity &lt;= threshold</c> reads as "at least as
+/// severe as". <c>--fail-on</c> depends on that, so the order must not be reversed.
+/// </remarks>
+internal enum Severity
+{
+    /// <summary>Impact at or above <see cref="LocalAnalysisConstants.SeverityHighThreshold"/>.</summary>
+    High,
+
+    /// <summary>Impact at or above <see cref="LocalAnalysisConstants.SeverityMediumThreshold"/>.</summary>
+    Medium,
+
+    /// <summary>Everything else.</summary>
+    Low
+}
+
+/// <summary>
+/// How much data a finding rests on, measured in the runs it was computed from.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Sessions, not executions: attempts of one test inside one session are correlated, so a test that
+/// retried its way to forty executions across six builds has six occasions' worth of evidence and
+/// must not be labelled as though it had forty.
+/// </para>
+/// <para>
+/// The finding's runs, not the subject's. Every kind measures over a subset of the runs its test
+/// appeared in — environmental runs are discounted, and a run whose session recorded no clock or
+/// whose durations cannot be normalised is one the question could not be asked of. The number is
+/// carried on the finding as <c>EvidenceSessions</c> and published beside the level, so a reader
+/// can see which of the two it came from. Whether a finding is emitted at all is a separate
+/// judgement, made on the subject — see <see cref="Xping.Core.Statistics.EvidenceLevelResolver"/>.
+/// </para>
+/// <para>
+/// The unit matches Xping Cloud, which bands an effective sample size computed over runs collapsed
+/// to one row per test per session. The thresholds do not, and deliberately —
+/// <see cref="LocalAnalysisConstants.EvidenceAdequateSessions"/> explains why. Local windows are
+/// small, so most local findings will legitimately be <see cref="Sparse"/> or <see cref="Adequate"/> —
+/// that is correct, and must be surfaced rather than hidden.
+/// </para>
+/// </remarks>
+internal enum EvidenceLevel
+{
+    /// <summary>Fewer than <see cref="LocalAnalysisConstants.EvidenceAdequateSessions"/> sessions.</summary>
+    Sparse,
+
+    /// <summary>
+    /// From <see cref="LocalAnalysisConstants.EvidenceAdequateSessions"/> to
+    /// <see cref="LocalAnalysisConstants.EvidenceRobustSessions"/> sessions, both included.
+    /// </summary>
+    Adequate,
+
+    /// <summary>More than <see cref="LocalAnalysisConstants.EvidenceRobustSessions"/> sessions.</summary>
+    Robust
+}

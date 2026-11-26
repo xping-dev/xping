@@ -1,0 +1,232 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Xping
+
+using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
+using System.Text.RegularExpressions;
+using Microsoft.Extensions.Logging;
+using Xping.Providers.Environment;
+using Xping.Session.Models.PullRequests;
+using Xping.Session.Serialization;
+
+namespace Xping.Providers.PullRequest.Internals;
+
+/// <summary>
+/// Detects GitHub pull request context from GitHub Actions environment variables and the
+/// workflow event payload.
+/// </summary>
+/// <remarks>
+/// Supports <c>pull_request</c> and <c>pull_request_target</c> event triggers.
+/// Returns <c>null</c> for any non-PR trigger or when required variables are absent.
+/// All failures are silently absorbed — detection never throws.
+/// <para>
+/// Works on github.com, GHE.com and GitHub Enterprise Server alike: the host comes from
+/// <c>GITHUB_SERVER_URL</c> into <see cref="PullRequestContext.ServerUrl"/>.
+/// </para>
+/// <para>
+/// <see cref="PullRequestContext.CommitSha"/> is the PR head commit, read from
+/// <c>pull_request.head.sha</c> in the event payload at <c>GITHUB_EVENT_PATH</c>.
+/// <c>GITHUB_SHA</c> is not used: it is the synthetic merge commit on <c>pull_request</c>
+/// and the base branch tip on <c>pull_request_target</c>.
+/// </para>
+/// <para>
+/// A missing or unreadable payload, or a missing <c>GITHUB_SERVER_URL</c>, on a PR event is logged
+/// as a warning: it usually means the tests run in a container that was given only some of the
+/// <c>GITHUB_*</c> variables or not the runner's temp directory, and PR integration would otherwise
+/// vanish without a trace.
+/// </para>
+/// </remarks>
+internal sealed class GitHubPullRequestDetector(
+    IEnvironmentVariableProvider env,
+    IXpingSerializer serializer,
+    ILogger<GitHubPullRequestDetector> logger) : IPlatformPullRequestDetector
+{
+    private const string Platform = "GitHub";
+
+    internal static readonly HashSet<string> PullRequestEventNames =
+        new(StringComparer.OrdinalIgnoreCase) { "pull_request", "pull_request_target" };
+
+    // Events that aren't PR builds and check out GITHUB_SHA by default; only these report
+    // CI.IsPullRequest=false. Any other event (issue_comment, workflow_run, repository_dispatch, …) runs
+    // on the default branch's ref but usually checks out other code, so calling it a push build would
+    // file the tested code under main's tip. Such runs send neither the flag nor CI.CommitSha.
+    private static readonly HashSet<string> _pushEventNames =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            "push", "schedule", "workflow_dispatch", "merge_group", "release", "create",
+            "deployment", "deployment_status",
+        };
+
+    /// <summary>
+    /// <c>CI.IsPullRequest</c> for a GitHub Actions run: <c>true</c> for a PR build, <c>false</c> for a
+    /// push-like event, and <c>null</c> when the event doesn't say which commit was built (then
+    /// <c>EnvironmentDetector</c> sends neither the flag nor <c>CI.CommitSha</c>).
+    /// </summary>
+    /// <remarks>
+    /// <see cref="PullRequestEventNames"/> misses other PR-triggered events (<c>pull_request_review</c>,
+    /// …), which run on <c>refs/pull/N/merge</c>; <c>pull_request_target</c> runs on the base ref, so
+    /// both checks are needed.
+    /// </remarks>
+    internal static bool? PullRequestFlag(Func<string, string?> getVariable)
+    {
+        string eventName = getVariable("GITHUB_EVENT_NAME") ?? string.Empty;
+        if (PullRequestEventNames.Contains(eventName) ||
+            (getVariable("GITHUB_REF")?.StartsWith("refs/pull/", StringComparison.Ordinal) ?? false))
+        {
+            return true;
+        }
+
+        return _pushEventNames.Contains(eventName) ? false : null;
+    }
+
+    private static readonly Regex _prRefPattern =
+        new(@"^refs/pull/(\d+)/", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <inheritdoc/>
+    public PullRequestContext? Detect()
+    {
+        try
+        {
+            return DetectCore();
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "GitHub PR detection failed unexpectedly; PR integration suppressed.");
+            return null;
+        }
+    }
+
+    private PullRequestContext? DetectCore()
+    {
+        // Must be a PR-triggered workflow
+        string? eventName = env.GetVariable("GITHUB_EVENT_NAME");
+        if (string.IsNullOrEmpty(eventName) || !PullRequestEventNames.Contains(eventName!))
+        {
+            logger.LogDebug(
+                "GitHub PR detection skipped: GITHUB_EVENT_NAME='{EventName}' " +
+                "(expected 'pull_request' or 'pull_request_target').",
+                eventName);
+            return null;
+        }
+
+        if (!TryGetServerUrl(out string? serverUrl))
+            return null;
+
+        // Extract PR number from GITHUB_REF: refs/pull/123/merge
+        if (!TryGetRequired("GITHUB_REF", out string? githubRef))
+            return null;
+
+        Match refMatch = _prRefPattern.Match(githubRef);
+        if (!refMatch.Success ||
+            !int.TryParse(refMatch.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out int prNumber))
+        {
+            logger.LogDebug(
+                "GitHub PR detection skipped: GITHUB_REF='{Ref}' does not match the expected PR pattern.",
+                githubRef);
+            return null;
+        }
+
+        // Split GITHUB_REPOSITORY into owner/name
+        if (!TryGetRequired("GITHUB_REPOSITORY", out string? repository))
+            return null;
+
+        if (!PullRequestEnvironment.TrySplitAtLastSlash(repository, out string? owner, out string? repoName))
+        {
+            logger.LogDebug(
+                "GitHub PR detection skipped: GITHUB_REPOSITORY='{Repository}' is not in 'owner/name' format.",
+                repository);
+            return null;
+        }
+
+        // Required fields
+        if (!TryGetRequired("GITHUB_BASE_REF", out string? baseBranch)) return null;
+        if (!TryGetRequired("GITHUB_HEAD_REF", out string? headBranch)) return null;
+        if (!TryReadHeadSha(out string? commitSha)) return null;
+
+        // Optional field
+        string? author = env.GetVariable("GITHUB_ACTOR");
+
+        logger.LogDebug(
+            "GitHub PR detected: {Owner}/{Repo}#{PR} on commit {Sha} ({Head} → {Base}).",
+            owner, repoName, prNumber, commitSha, headBranch, baseBranch);
+
+        return new PullRequestContext(
+            platform: PullRequestPlatform.GitHub,
+            serverUrl: serverUrl,
+            repositoryOwner: owner,
+            repositoryName: repoName,
+            pullRequestNumber: prNumber,
+            commitSha: commitSha,
+            baseBranch: baseBranch,
+            headBranch: headBranch,
+            author: author);
+    }
+
+    private bool TryGetServerUrl([NotNullWhen(true)] out string? serverUrl)
+    {
+        serverUrl = null;
+
+        // Actions always sets GITHUB_SERVER_URL, so an unset value means a container was given only
+        // some GITHUB_* variables. Warn: PR integration would otherwise vanish without a trace.
+        string? raw = env.GetVariable("GITHUB_SERVER_URL");
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            logger.LogWarning(
+                "GitHub PR detection skipped: GITHUB_SERVER_URL is not set, so the GitHub host is unknown. " +
+                "If tests run in a container, pass GITHUB_SERVER_URL along with the other GITHUB_* variables.");
+            return false;
+        }
+
+        if (!PullRequestEnvironment.TryNormalizeServerUrl(raw, out serverUrl))
+        {
+            logger.LogDebug(
+                "GitHub PR detection skipped: GITHUB_SERVER_URL='{ServerUrl}' is not an absolute http(s) URL.",
+                raw);
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool TryReadHeadSha([NotNullWhen(true)] out string? sha)
+    {
+        sha = null;
+        string? eventPath = env.GetVariable("GITHUB_EVENT_PATH");
+        if (string.IsNullOrWhiteSpace(eventPath))
+        {
+            logger.LogWarning(
+                "GitHub PR detection skipped: GITHUB_EVENT_PATH is not set, so the PR head commit is unknown.");
+            return false;
+        }
+
+        GitHubEventPayload? payload;
+        try
+        {
+            payload = GitHubEventPayload.Read(eventPath!, serializer);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "GitHub PR detection skipped: event payload at '{EventPath}' could not be read. " +
+                "If tests run in a container, mount the runner's temp directory.",
+                eventPath);
+            return false;
+        }
+
+        string? headSha = payload?.PullRequest?.Head?.Sha;
+        if (string.IsNullOrWhiteSpace(headSha))
+        {
+            logger.LogWarning(
+                "GitHub PR detection skipped: event payload at '{EventPath}' has no pull_request.head.sha.",
+                eventPath);
+            return false;
+        }
+
+        sha = headSha!;
+        return true;
+    }
+
+    private bool TryGetRequired(string variable, [NotNullWhen(true)] out string? value) =>
+        PullRequestEnvironment.TryGetRequired(env, logger, Platform, variable, out value);
+}

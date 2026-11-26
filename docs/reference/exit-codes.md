@@ -10,3 +10,4 @@
 | 64 | `UsageError` | The command line could not be parsed: unknown option, bad value, missing subcommand. |
 | 69 | `NotImplemented` | The command exists but is not implemented yet. |
 | 70 | `InternalError` | Xping failed unexpectedly. Please report it. |
+| 130 | `Cancelled` | The run was cancelled with Ctrl+C. |

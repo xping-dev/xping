@@ -4,4 +4,13 @@
     <ProjectReference Include="..\..\src\Xping.Core\Xping.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Recorded failure text, shared with the normaliser tests it was collected for. -->
+    <Compile Include="..\Xping.Session.Tests\Diagnostics\RealFailureSamples.cs" Link="Shared\RealFailureSamples.cs" />
+  </ItemGroup>
+
 </Project>

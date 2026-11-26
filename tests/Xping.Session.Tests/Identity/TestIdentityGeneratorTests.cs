@@ -1,0 +1,715 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Xping
+
+using System.Globalization;
+using Xping.Session.Identity;
+using Xping.Session.Identity.Internals;
+using Xping.Session.Models.Executions;
+using Xping.Session.Tests.Diagnostics;
+
+namespace Xping.Session.Tests.Identity;
+
+public sealed class TestIdentityGeneratorTests
+{
+    private static readonly object[] NullParameterArray = [null!];
+    private static readonly object[] NestedArrayParameter = [new int[] { 1, 2 }];
+
+    private static ITestIdentityGenerator BuildGenerator()
+    {
+        return new TestIdentityGenerator();
+    }
+
+    private const string ValidFqn = "MyNamespace.MyClass.MyTest";
+    private const string ValidAssembly = "MyAssembly";
+
+    // ---------------------------------------------------------------------------
+    // Generate
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void Generate_ShouldReturnIdentity_WithAllFieldsParsedFromFQN()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var identity = generator.Generate(ValidFqn, ValidAssembly);
+
+        // Assert
+        Assert.NotNull(identity);
+        Assert.Equal(ValidFqn, identity.FullyQualifiedName);
+        Assert.Equal(ValidAssembly, identity.Assembly);
+        Assert.Equal("MyNamespace", identity.Namespace);
+        Assert.Equal("MyClass", identity.ClassName);
+        Assert.Equal("MyTest", identity.MethodName);
+    }
+
+    [Fact]
+    public void Generate_ShouldProduceStableTestId_ForSameFQN()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var id1 = generator.Generate(ValidFqn, ValidAssembly).TestFingerprint;
+        var id2 = generator.Generate(ValidFqn, ValidAssembly).TestFingerprint;
+
+        // Assert
+        Assert.Equal(id1, id2);
+    }
+
+    [Fact]
+    public void Generate_ShouldProduceDifferentTestIds_ForDifferentFQNs()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var id1 = generator.Generate("Namespace.ClassA.Test", ValidAssembly).TestFingerprint;
+        var id2 = generator.Generate("Namespace.ClassB.Test", ValidAssembly).TestFingerprint;
+
+        // Assert
+        Assert.NotEqual(id1, id2);
+    }
+
+    [Fact]
+    public void Generate_ShouldThrowArgumentNullException_ForNullFQN()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() => generator.Generate(null!, ValidAssembly));
+    }
+
+    [Fact]
+    public void Generate_ShouldThrowArgumentNullException_ForEmptyFQN()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() => generator.Generate(string.Empty, ValidAssembly));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Generate_ShouldRecordAnUnattributedIdentity_ForBlankAssembly(string? assembly)
+    {
+        // Arrange — the adapters cannot always resolve an assembly, and they all record inside a
+        // catch-all. Throwing here dropped the execution outright instead of reporting it as
+        // unattributed, which is data a customer paid to collect and would never see.
+        var generator = BuildGenerator();
+
+        // Act
+        TestIdentity identity = generator.Generate(ValidFqn, assembly!);
+
+        // Assert
+        Assert.Equal(string.Empty, identity.Assembly);
+        Assert.Equal(ValidFqn, identity.FullyQualifiedName);
+        Assert.NotEmpty(identity.TestFingerprint);
+    }
+
+    [Fact]
+    public void Generate_ShouldThrowArgumentException_ForInvalidFQN_SingleSegment()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act & Assert
+        Assert.Throws<ArgumentException>(() => generator.Generate("NoDotsHere", ValidAssembly));
+    }
+
+    [Fact]
+    public void Generate_ShouldIncludeParameterHash_ForParameterizedTests()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+        var parameters = new object[] { 1, "hello" };
+
+        // Act
+        var identity = generator.Generate(ValidFqn, ValidAssembly, parameters);
+
+        // Assert
+        Assert.NotNull(identity.ParameterHash);
+        Assert.NotEmpty(identity.ParameterHash);
+    }
+
+    [Fact]
+    public void Generate_ShouldProduceDifferentTestId_ForDifferentParameters()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var withParams = generator.Generate(ValidFqn, ValidAssembly, parameters: [1, "a"]);
+        var withoutParams = generator.Generate(ValidFqn, ValidAssembly);
+
+        // Assert
+        Assert.NotEqual(withParams.TestFingerprint, withoutParams.TestFingerprint);
+    }
+
+    [Fact]
+    public void Generate_ShouldUseProvidedDisplayName()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var identity = generator.Generate(ValidFqn, ValidAssembly, displayName: "My Custom Name");
+
+        // Assert
+        Assert.Equal("My Custom Name", identity.DisplayName);
+    }
+
+    [Fact]
+    public void Generate_ShouldDefaultDisplayName_ToMethodName_WhenNoParameters()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var identity = generator.Generate(ValidFqn, ValidAssembly);
+
+        // Assert
+        Assert.Equal("MyTest", identity.DisplayName);
+    }
+
+    [Fact]
+    public void Generate_ShouldParseNestedNamespace_Correctly()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+        const string fqn = "Company.Product.Tests.Feature.MyTestClass.ShouldDoSomething";
+
+        // Act
+        var identity = generator.Generate(fqn, ValidAssembly);
+
+        // Assert
+        Assert.Equal("Company.Product.Tests.Feature", identity.Namespace);
+        Assert.Equal("MyTestClass", identity.ClassName);
+        Assert.Equal("ShouldDoSomething", identity.MethodName);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Generate with pinned testFingerprint
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void Generate_WhenTestFingerprintProvided_UsesPinnedValueDirectly()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+        const string pinnedValue = "my-stable-id";
+
+        // Act
+        var identity = generator.Generate(ValidFqn, ValidAssembly, testFingerprint: pinnedValue);
+
+        // Assert
+        Assert.Equal(pinnedValue, identity.TestFingerprint);
+    }
+
+    [Fact]
+    public void Generate_WhenTestFingerprintProvided_DoesNotMatchSHA256OfFQN()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var withPin = generator.Generate(ValidFqn, ValidAssembly, testFingerprint: "custom-id").TestFingerprint;
+        var withoutPin = generator.Generate(ValidFqn, ValidAssembly).TestFingerprint;
+
+        // Assert — the pinned value is not the same as the computed SHA256
+        Assert.NotEqual(withPin, withoutPin);
+    }
+
+    [Fact]
+    public void Generate_WhenTestFingerprintIsNull_FallsBackToSHA256()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var fromGenerate = generator.Generate(ValidFqn, ValidAssembly, testFingerprint: null).TestFingerprint;
+        var fromDirectHash = generator.GenerateTestFingerprint(ValidFqn);
+
+        // Assert
+        Assert.Equal(fromDirectHash, fromGenerate);
+    }
+
+    [Fact]
+    public void Generate_WhenTestFingerprintIsEmpty_FallsBackToSHA256()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var fromGenerate = generator.Generate(ValidFqn, ValidAssembly, testFingerprint: string.Empty).TestFingerprint;
+        var fromDirectHash = generator.GenerateTestFingerprint(ValidFqn);
+
+        // Assert
+        Assert.Equal(fromDirectHash, fromGenerate);
+    }
+
+    [Fact]
+    public void Generate_WhenTestFingerprintIsWhitespace_FallsBackToSHA256()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var fromGenerate = generator.Generate(ValidFqn, ValidAssembly, testFingerprint: "   ").TestFingerprint;
+        var fromDirectHash = generator.GenerateTestFingerprint(ValidFqn);
+
+        // Assert
+        Assert.Equal(fromDirectHash, fromGenerate);
+    }
+
+    [Fact]
+    public void Generate_PinnedFingerprint_WithParameters_ProducesUniqueValuesPerVariant()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+        const string pinnedValue = "fixed-v1";
+
+        // Act
+        var params1 = generator.Generate(ValidFqn, ValidAssembly, parameters: [1, 2], testFingerprint: pinnedValue).TestFingerprint;
+        var params2 = generator.Generate(ValidFqn, ValidAssembly, parameters: [3, 4], testFingerprint: pinnedValue).TestFingerprint;
+
+        // Assert — different parameter sets produce different fingerprints even with the same pin
+        Assert.NotEqual(params1, params2);
+        Assert.StartsWith(pinnedValue + ":", params1, StringComparison.Ordinal);
+        Assert.StartsWith(pinnedValue + ":", params2, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generate_PinnedFingerprint_IsImmutableAcrossNameChanges()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+        const string pinnedValue = "fixed-v1";
+
+        // Act
+        var identity1 = generator.Generate("A.B.OldTest", ValidAssembly, testFingerprint: pinnedValue).TestFingerprint;
+        var identity2 = generator.Generate("X.Y.NewTest", ValidAssembly, testFingerprint: pinnedValue).TestFingerprint;
+
+        // Assert
+        Assert.Equal(pinnedValue, identity1);
+        Assert.Equal(pinnedValue, identity2);
+    }
+
+    [Fact]
+    public void Generate_PinnedFingerprint_DoesNotAffectOtherIdentityFields()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+        var parameters = new object[] { 42 };
+
+        // Act
+        var identity = generator.Generate(
+            ValidFqn, ValidAssembly,
+            parameters: parameters,
+            displayName: "Custom Name",
+            sourceFile: "file.cs",
+            sourceLineNumber: 10,
+            testFingerprint: "my-pin");
+
+        // Assert — TestFingerprint = pin + ":" + paramHash; everything else is normal
+        Assert.Equal("my-pin:42", identity.TestFingerprint);
+        Assert.Equal(ValidFqn, identity.FullyQualifiedName);
+        Assert.Equal(ValidAssembly, identity.Assembly);
+        Assert.Equal("MyNamespace", identity.Namespace);
+        Assert.Equal("MyClass", identity.ClassName);
+        Assert.Equal("MyTest", identity.MethodName);
+        Assert.Equal("Custom Name", identity.DisplayName);
+        Assert.NotNull(identity.ParameterHash);
+        Assert.Equal("file.cs", identity.SourceFile);
+        Assert.Equal(10, identity.SourceLineNumber);
+    }
+
+    [Fact]
+    public void Generate_PinnedFingerprintAcceptsArbitraryFormat()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act + Assert — UUID, slug, and 64-char SHA256-like hex are all accepted as-is
+        var uuid = "c4e12f97-1a23-4b56-8c9d-0e1f23456789";
+        Assert.Equal(uuid,
+            generator.Generate(ValidFqn, ValidAssembly, testFingerprint: uuid).TestFingerprint);
+
+        var slug = "login-happy-path-v1";
+        Assert.Equal(slug,
+            generator.Generate(ValidFqn, ValidAssembly, testFingerprint: slug).TestFingerprint);
+
+        var hexLike = new string('a', 64);
+        Assert.Equal(hexLike,
+            generator.Generate(ValidFqn, ValidAssembly, testFingerprint: hexLike).TestFingerprint);
+    }
+
+    [Fact]
+    public void Generate_PinnedFingerprint_WithParameters_AppendsSeparatorAndParamHash()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+        const string pin = "login-v1";
+        var parameters = new object[] { "admin", true };
+
+        // Act
+        var identity = generator.Generate(ValidFqn, ValidAssembly, parameters: parameters, testFingerprint: pin);
+
+        // Assert — fingerprint is "{pin}:{paramHash}", colon separator is unambiguous
+        var expectedParamHash = generator.GenerateParameterHash(parameters);
+        Assert.Equal($"{pin}:{expectedParamHash}", identity.TestFingerprint);
+    }
+
+    [Fact]
+    public void Generate_PinnedFingerprint_WithNoParameters_UsesLiteralValue()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+        const string pin = "login-v1";
+
+        // Act
+        var identity = generator.Generate(ValidFqn, ValidAssembly, testFingerprint: pin);
+
+        // Assert — no parameters means the pinned value is used as-is, no suffix appended
+        Assert.Equal(pin, identity.TestFingerprint);
+    }
+
+    // ---------------------------------------------------------------------------
+    // GenerateTestFingerprint
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void GenerateTestId_ShouldBeDeterministic()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var id1 = generator.GenerateTestFingerprint(ValidFqn);
+        var id2 = generator.GenerateTestFingerprint(ValidFqn);
+
+        // Assert
+        Assert.Equal(id1, id2);
+    }
+
+    [Fact]
+    public void GenerateTestId_ShouldBe64CharHex()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var id = generator.GenerateTestFingerprint(ValidFqn);
+
+        // Assert
+        Assert.Equal(64, id.Length);
+        Assert.True(id.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f'));
+    }
+
+    [Fact]
+    public void GenerateTestId_ShouldDifferWhenParameterHashDiffers()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var idNoParam = generator.GenerateTestFingerprint(ValidFqn, parameterHash: null);
+        var idWithParam = generator.GenerateTestFingerprint(ValidFqn, parameterHash: "abc");
+
+        // Assert
+        Assert.NotEqual(idNoParam, idWithParam);
+    }
+
+    [Fact]
+    public void GenerateTestId_ShouldThrowArgumentNullException_ForNullFQN()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() => generator.GenerateTestFingerprint(null!));
+    }
+
+    // ---------------------------------------------------------------------------
+    // GenerateParameterHash
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void GenerateParameterHash_ShouldReturnEmpty_ForZeroLengthArray()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var hash = generator.GenerateParameterHash([]);
+
+        // Assert
+        Assert.Equal(string.Empty, hash);
+    }
+
+    [Fact]
+    public void GenerateParameterHash_ShouldFormatIntegers_WithInvariantCulture()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var hash = generator.GenerateParameterHash([1, 2, 3]);
+
+        // Assert
+        Assert.Equal("1,2,3", hash);
+    }
+
+    [Fact]
+    public void GenerateParameterHash_ShouldFormatNull_AsNullString()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var hash = generator.GenerateParameterHash(NullParameterArray);
+
+        // Assert
+        Assert.Equal("null", hash);
+    }
+
+    [Fact]
+    public void GenerateParameterHash_ShouldFormatArrays_WithBrackets()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var hash = generator.GenerateParameterHash(NestedArrayParameter);
+
+        // Assert
+        Assert.Equal("[1,2]", hash);
+    }
+
+    [Fact]
+    public void GenerateParameterHash_ShouldBeDeterministic_ForSameParams()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var hash1 = generator.GenerateParameterHash(["hello", 42]);
+        var hash2 = generator.GenerateParameterHash(["hello", 42]);
+
+        // Assert
+        Assert.Equal(hash1, hash2);
+    }
+
+    // ---------------------------------------------------------------------------
+    // GenerateErrorMessageHash / GenerateStackTraceHash
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public void GenerateErrorMessageHash_ShouldReturnNull_ForNullInput()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act & Assert
+        Assert.Null(generator.GenerateErrorMessageHash(null));
+    }
+
+    [Fact]
+    public void GenerateErrorMessageHash_ShouldReturnNull_ForEmptyInput()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act & Assert
+        Assert.Null(generator.GenerateErrorMessageHash(string.Empty));
+        Assert.Null(generator.GenerateErrorMessageHash("   "));
+    }
+
+    [Fact]
+    public void GenerateErrorMessageHash_ShouldBeDeterministic()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+        const string message = "Expected 1 but was 2.";
+
+        // Act
+        var h1 = generator.GenerateErrorMessageHash(message);
+        var h2 = generator.GenerateErrorMessageHash(message);
+
+        // Assert
+        Assert.Equal(h1, h2);
+    }
+
+    [Fact]
+    public void GenerateErrorMessageHash_ShouldBeDifferent_ForDifferentMessages()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act
+        var h1 = generator.GenerateErrorMessageHash("Error A");
+        var h2 = generator.GenerateErrorMessageHash("Error B");
+
+        // Assert
+        Assert.NotEqual(h1, h2);
+    }
+
+    [Fact]
+    public void GenerateStackTraceHash_ShouldReturnNull_ForNullInput()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+
+        // Act & Assert
+        Assert.Null(generator.GenerateStackTraceHash(null));
+    }
+
+    [Fact]
+    public void GenerateStackTraceHash_ShouldBeDeterministic()
+    {
+        // Arrange
+        var generator = BuildGenerator();
+        const string trace = "at SomeClass.SomeMethod() in file.cs:line 42";
+
+        // Act
+        var h1 = generator.GenerateStackTraceHash(trace);
+        var h2 = generator.GenerateStackTraceHash(trace);
+
+        // Assert
+        Assert.Equal(h1, h2);
+    }
+
+    [Fact]
+    public void GenerateErrorMessageHash_IsEqualForTwoRunsOfTheSameFailureWithDifferentTimings()
+    {
+        // Two recorded runs of one xUnit test, differing only in their millisecond readings.
+        var generator = BuildGenerator();
+
+        var first = generator.GenerateErrorMessageHash(RealFailureSamples.XunitWatchdogFirstRun);
+        var second = generator.GenerateErrorMessageHash(RealFailureSamples.XunitWatchdogSecondRun);
+
+        Assert.Equal(first, second);
+    }
+
+    [Theory]
+    [InlineData(
+        "Order 3f2504e0-4f89-11d3-9a0c-0305e82c3301 was not found",
+        "Order 9b2c1d7e-0a6f-4e2b-8c3d-5f6a7b8c9d0e was not found")]
+    [InlineData(
+        "Could not read /home/runner/work/app/data.json",
+        "Could not read C:\\agent\\_work\\app\\data.json")]
+    [InlineData(
+        "Request started at 2026-10-09T08:15:30Z timed out",
+        "Request started at 2026-10-10T17:42:01Z timed out")]
+    [InlineData("Expected:\r\nTrue\r\nActual:\r\nFalse", "Expected:\nTrue\nActual:\nFalse")]
+    [InlineData(
+        "Could not find file '/home/runner/work/app/app/data.json'.",
+        "Could not find file '/Users/adrian/Dev/app/data.json'.")]
+    public void GenerateErrorMessageHash_IsEqualWhenOnlyRunVaryingDetailDiffers(string first, string second)
+    {
+        var generator = BuildGenerator();
+
+        Assert.Equal(generator.GenerateErrorMessageHash(first), generator.GenerateErrorMessageHash(second));
+    }
+
+    [Fact]
+    public void GenerateErrorMessageHash_IsDifferentWhenAQuotedLiteralDiffers()
+    {
+        // Quoted literals without digits are the diagnostic signal and must survive normalisation.
+        var generator = BuildGenerator();
+
+        var first = generator.GenerateErrorMessageHash("Key 'customerId' was missing");
+        var second = generator.GenerateErrorMessageHash("Key 'orderId' was missing");
+
+        Assert.NotEqual(first, second);
+    }
+
+    [Fact]
+    public void GenerateStackTraceHash_IsEqualWhenOnlyPathsAndLineNumbersDiffer()
+    {
+        var generator = BuildGenerator();
+
+        var ci = generator.GenerateStackTraceHash(
+            "   at MyApp.Services.OrderService.Place(Order order) in /home/runner/work/app/OrderService.cs:line 88\n" +
+            "   at MyApp.Tests.OrderTests.PlacingAnOrderSucceeds() in /home/runner/work/app/OrderTests.cs:line 12");
+        var local = generator.GenerateStackTraceHash(
+            "   at MyApp.Services.OrderService.Place(Order order) in C:\\src\\app\\OrderService.cs:line 91\r\n" +
+            "   at MyApp.Tests.OrderTests.PlacingAnOrderSucceeds() in C:\\src\\app\\OrderTests.cs:line 12\r\n" +
+            "   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)");
+
+        Assert.NotNull(ci);
+        Assert.Equal(ci, local);
+    }
+
+    [Fact]
+    public void GenerateStackTraceHash_IsEqualWhenOnlyCompilerGeneratedOrdinalsDiffer()
+    {
+        // Adding an async method above renumbers the state machine from d__5 to d__6.
+        var generator = BuildGenerator();
+
+        var before = generator.GenerateStackTraceHash(
+            "   at MyApp.Tests.OrderTests.<PlacingAnOrder>d__5.MoveNext() in /src/OrderTests.cs:line 12");
+        var after = generator.GenerateStackTraceHash(
+            "   at MyApp.Tests.OrderTests.<PlacingAnOrder>d__6.MoveNext() in /src/OrderTests.cs:line 19");
+
+        Assert.Equal(before, after);
+    }
+
+    [Fact]
+    public void GenerateStackTraceHash_IsDifferentWhenTheFailingMethodDiffers()
+    {
+        var generator = BuildGenerator();
+
+        var first = generator.GenerateStackTraceHash("   at MyApp.Services.OrderService.Place(Order order)");
+        var second = generator.GenerateStackTraceHash("   at MyApp.Services.OrderService.Cancel(Order order)");
+
+        Assert.NotEqual(first, second);
+    }
+
+    [Fact]
+    public void GenerateStackTraceHash_ShouldReturnNull_WhenTheTraceHasNoFrames()
+    {
+        var generator = BuildGenerator();
+
+        Assert.Null(generator.GenerateStackTraceHash("no frames here, just prose"));
+    }
+
+    [Fact]
+    public void GenerateStackTraceHash_ShouldReturnNull_WhenEveryFrameBelongsToTheFramework()
+    {
+        // Framework frames vary with runtime warm-up, so they must not become a grouping key.
+        var generator = BuildGenerator();
+
+        Assert.Null(generator.GenerateStackTraceHash(RealFailureSamples.FrameworkOnlyStackTrace));
+    }
+
+    [Fact]
+    public void GenerateStackTraceHash_IsDifferentForTypesThatDifferOnlyInGenericArity()
+    {
+        var generator = BuildGenerator();
+
+        var one = generator.GenerateStackTraceHash("   at MyApp.Data.Repo`1.Get(Int32 id)");
+        var two = generator.GenerateStackTraceHash("   at MyApp.Data.Repo`2.Get(Int32 id)");
+
+        Assert.NotEqual(one, two);
+    }
+
+    [Fact]
+    public void GenerateErrorMessageHash_IsEqualForALongMessageWhateverItsLineEndings()
+    {
+        // Truncating before unifying line endings cut a CRLF message earlier than the LF one.
+        var generator = BuildGenerator();
+        string lines = string.Concat(Enumerable.Repeat("Expected item to be empty{0}", 400));
+
+        var windows = generator.GenerateErrorMessageHash(string.Format(CultureInfo.InvariantCulture, lines, "\r\n"));
+        var unix = generator.GenerateErrorMessageHash(string.Format(CultureInfo.InvariantCulture, lines, "\n"));
+
+        Assert.Equal(unix, windows);
+    }
+}
+

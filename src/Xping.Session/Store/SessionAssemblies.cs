@@ -1,0 +1,258 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Xping
+
+using System.Collections.ObjectModel;
+
+using Xping.Session.Models;
+using Xping.Session.Models.Executions;
+using Xping.Session.Models.Statistics;
+
+namespace Xping.Session.Store;
+
+/// <summary>
+/// Resolves which test assemblies a stored session covers, and narrows a session to one of them.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A session records one test host process, not one test assembly. VSTest batches test projects that
+/// share a target framework and architecture into a single host, so a solution-wide
+/// <c>dotnet test</c> produces one session holding every assembly's executions. Treating such a
+/// session as belonging to whichever assembly its first execution happened to name would label the
+/// run arbitrarily: one assembly would inherit another's tests and run count, and the rest would
+/// vanish from a scoped report entirely.
+/// </para>
+/// <para>
+/// So a session is not asked which assembly it <i>is</i>. It is asked which assemblies it
+/// <i>covers</i>, and is projected onto one of them when a report is scoped. A run that exercised
+/// three assemblies is one run of each, carrying only that assembly's executions.
+/// </para>
+/// </remarks>
+internal static class SessionAssemblies
+{
+    /// <summary>
+    /// Returns the distinct test assemblies a session covers.
+    /// </summary>
+    /// <param name="session">The session to inspect, or <see langword="null"/>.</param>
+    /// <returns>
+    /// The assembly names in ordinal order, or an empty list when the session names none.
+    /// </returns>
+    /// <remarks>
+    /// Sorted rather than left in execution order so that two runs of the same solution list their
+    /// assemblies identically however the host happened to interleave them — analysis output has to
+    /// be byte-identical across runs.
+    /// <para>
+    /// An empty result is a real answer, not a failure. An execution recorded before identity
+    /// generation completed carries no assembly, and a session made up entirely of those cannot be
+    /// attributed to anything; it is reported as covering nothing rather than guessed at.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<string> Of(TestSession? session) => Of(session?.Executions);
+
+    /// <summary>
+    /// Returns the distinct test assemblies a set of executions covers.
+    /// </summary>
+    /// <param name="executions">The executions to inspect, or <see langword="null"/>.</param>
+    /// <returns>
+    /// The assembly names in ordinal order, or an empty list when the executions name none.
+    /// </returns>
+    /// <remarks>
+    /// Derived from the executions rather than read back from <see cref="TestSession.Assemblies"/>
+    /// so that there is one definition of "which assemblies does this cover". A stored session
+    /// holds every execution, so derivation is exact.
+    /// </remarks>
+    public static IReadOnlyList<string> Of(IReadOnlyCollection<TestExecution>? executions)
+    {
+        if (executions == null)
+            return [];
+
+        var names = new SortedSet<string>(StringComparer.Ordinal);
+
+        foreach (TestExecution execution in executions)
+        {
+            string candidate = execution.Identity.Assembly;
+            if (!string.IsNullOrEmpty(candidate))
+                names.Add(candidate);
+        }
+
+        return names.Count == 0 ? [] : [.. names];
+    }
+
+    /// <summary>
+    /// Returns whether a session recorded any execution belonging to a given test assembly.
+    /// </summary>
+    /// <param name="session">The session to inspect, or <see langword="null"/>.</param>
+    /// <param name="assembly">The assembly name to look for.</param>
+    /// <returns><see langword="true"/> when at least one execution names that assembly.</returns>
+    public static bool Covers(TestSession? session, string assembly)
+    {
+        if (session == null || string.IsNullOrEmpty(assembly))
+            return false;
+
+        foreach (TestExecution execution in session.Executions)
+        {
+            if (string.Equals(execution.Identity.Assembly, assembly, StringComparison.Ordinal))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Narrows a session to the executions belonging to one test assembly.
+    /// </summary>
+    /// <param name="session">The session to narrow, or <see langword="null"/>.</param>
+    /// <param name="assembly">The assembly to keep.</param>
+    /// <returns>
+    /// A copy carrying only that assembly's executions, or <see langword="null"/> when the session
+    /// recorded none of them — which is how a caller tells "this run is not part of that assembly's
+    /// history" apart from "this run of it executed nothing".
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// <see cref="TestSession.SessionId"/> and <see cref="TestSession.StartedAt"/> are preserved, so
+    /// a projection still sorts and de-duplicates as the run it came from. Two projections of one
+    /// session share an id, which is safe because a window is always scoped to a single assembly and
+    /// therefore never holds both.
+    /// </para>
+    /// <para>
+    /// The session's statistics are split the way the counters themselves split.
+    /// <see cref="TestSession.QuickStatistics"/> is dropped: it describes the whole host process
+    /// rather than this slice of it, and a solution-wide count carried onto one assembly's history
+    /// would be wrong in exactly the way this projection exists to prevent. <see cref="TestSession.StatisticsByAssembly"/> is narrowed
+    /// to the one entry instead of dropped — it already is this slice, counted by the SDK that saw
+    /// the run.
+    /// </para>
+    /// </remarks>
+    public static TestSession? Project(TestSession? session, string assembly) =>
+        Filter(session, assembly, keepMatches: true);
+
+    /// <summary>
+    /// Removes one test assembly's executions from a session, keeping every other assembly's.
+    /// </summary>
+    /// <param name="session">The session to strip, or <see langword="null"/>.</param>
+    /// <param name="assembly">The assembly to remove.</param>
+    /// <returns>
+    /// A copy without that assembly's executions, or <see langword="null"/> when nothing is left —
+    /// the session recorded that assembly and nothing else, so there is no run left to keep.
+    /// </returns>
+    /// <remarks>
+    /// The complement of <see cref="Project"/>, and what makes a scoped delete safe: one run can
+    /// hold several test projects' history, so deleting a run outright to clear one of them would
+    /// take the others with it. Stripping lets the run survive carrying only what was not asked for
+    /// — including the statistics of every assembly but the removed one.
+    /// </remarks>
+    public static TestSession? Excluding(TestSession? session, string assembly) =>
+        Filter(session, assembly, keepMatches: false);
+
+    /// <summary>
+    /// Returns the session with <see cref="TestSession.Assemblies"/> derived from its executions.
+    /// </summary>
+    /// <param name="session">The session.</param>
+    /// <returns>The session itself when it already agrees, otherwise a copy that does.</returns>
+    /// <remarks>
+    /// The local store names and summarizes a file by the assemblies at its head, so what is written
+    /// there has to be what the executions say, whoever built the session.
+    /// </remarks>
+    internal static TestSession WithDerivedAssemblies(TestSession session)
+    {
+        IReadOnlyList<string> derived = Of(session);
+        if (session.Assemblies.SequenceEqual(derived, StringComparer.Ordinal))
+            return session;
+
+        return new TestSession
+        {
+            SessionId = session.SessionId,
+            StartedAt = session.StartedAt,
+            EndedAt = session.EndedAt,
+            EnvironmentInfo = session.EnvironmentInfo,
+            Executions = session.Executions,
+            Assemblies = derived,
+            SessionState = session.SessionState,
+            PullRequestContext = session.PullRequestContext,
+            SchemaVersion = session.SchemaVersion,
+            Producer = session.Producer,
+            QuickStatistics = session.QuickStatistics,
+            StatisticsByAssembly = session.StatisticsByAssembly
+        };
+    }
+
+    /// <summary>
+    /// Builds the session that remains when executions are kept or dropped by assembly.
+    /// </summary>
+    private static TestSession? Filter(TestSession? session, string assembly, bool keepMatches)
+    {
+        if (session == null || string.IsNullOrEmpty(assembly))
+            return null;
+
+        var executions = new List<TestExecution>(session.Executions.Count);
+
+        foreach (TestExecution execution in session.Executions)
+        {
+            bool matches = string.Equals(
+                execution.Identity.Assembly, assembly, StringComparison.Ordinal);
+
+            if (matches == keepMatches)
+                executions.Add(execution);
+        }
+
+        if (executions.Count == 0)
+            return null;
+
+        // Nothing was filtered out, so no copy is needed. The common case — a single-project
+        // `dotnet test`, projected onto its one assembly — pays nothing.
+        if (executions.Count == session.Executions.Count)
+            return session;
+
+        // Built by object initializer rather than TestSessionBuilder: the builder stamps the producer
+        // from the running assembly, which would relabel a session recorded by an older SDK with
+        // whatever is reading it.
+        return new TestSession
+        {
+            SessionId = session.SessionId,
+            StartedAt = session.StartedAt,
+            EndedAt = session.EndedAt,
+            EnvironmentInfo = session.EnvironmentInfo,
+            Executions = executions.AsReadOnly(),
+            // Recomputed, never copied: a session projected onto one assembly must not keep
+            // claiming to cover the assemblies this filter just stripped out of it.
+            Assemblies = Of(executions),
+            SessionState = session.SessionState,
+            PullRequestContext = session.PullRequestContext,
+            SchemaVersion = session.SchemaVersion,
+            Producer = session.Producer,
+            QuickStatistics = null,
+            // Kept, unlike the one above, because it is the one statistic that decomposes: each
+            // entry already counts exactly one assembly's executions.
+            StatisticsByAssembly = FilterStatistics(session.StatisticsByAssembly, assembly, keepMatches)
+        };
+    }
+
+    /// <summary>
+    /// Keeps or drops one assembly's entry in a session's per-assembly statistics.
+    /// </summary>
+    /// <returns>
+    /// The narrowed breakdown, or <see langword="null"/> when nothing is left — a session that
+    /// carried no breakdown, and one whose breakdown said nothing about this assembly, are both
+    /// reported the same way the SDK reports a run it could not attribute.
+    /// </returns>
+    private static ReadOnlyDictionary<string, AssemblyStatistics>? FilterStatistics(
+        IReadOnlyDictionary<string, AssemblyStatistics>? statistics, string assembly, bool keepMatches)
+    {
+        if (statistics == null || statistics.Count == 0)
+            return null;
+
+        var kept = new SortedDictionary<string, AssemblyStatistics>(StringComparer.Ordinal);
+
+        foreach (KeyValuePair<string, AssemblyStatistics> entry in statistics)
+        {
+            bool matches = string.Equals(entry.Key, assembly, StringComparison.Ordinal);
+
+            if (matches == keepMatches)
+                kept.Add(entry.Key, entry.Value);
+        }
+
+        // Wrapped for the same reason the accumulator wraps its own snapshot: what lands on a
+        // TestSession has to be as immutable as the rest of it.
+        return kept.Count == 0 ? null : new ReadOnlyDictionary<string, AssemblyStatistics>(kept);
+    }
+}

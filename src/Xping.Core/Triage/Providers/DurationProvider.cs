@@ -1,0 +1,1210 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) Xping
+
+using System.Collections.Immutable;
+using System.Globalization;
+using Xping.Core.Statistics;
+using Xping.Core.Triage.Indexes;
+using Xping.Core.Triage.Model;
+
+namespace Xping.Core.Triage.Providers;
+
+/// <summary>
+/// One execution, published so the numbers computed from it can be checked.
+/// </summary>
+/// <remarks>
+/// <see cref="StartedAt"/> is the start of the run the execution belongs to, not of the execution
+/// itself. The per-execution timestamp is unreliable under retry on the xUnit adapter — the first
+/// attempt's start is reused for every later attempt — while the duration is per-attempt everywhere,
+/// so the report publishes the duration and dates it by its session.
+/// </remarks>
+/// <param name="SessionId">The run it happened in.</param>
+/// <param name="StartedAt">When that run started.</param>
+/// <param name="Sha">The commit it ran at, or <see langword="null"/> when none was recorded.</param>
+/// <param name="Outcome">How it ended.</param>
+/// <param name="DurationMs">How long it took.</param>
+internal sealed record DurationExemplar(
+    string SessionId,
+    DateTime StartedAt,
+    string? Sha,
+    string Outcome,
+    long DurationMs);
+
+/// <summary>
+/// One slice's duration profile, always carrying the counts it was computed from.
+/// </summary>
+/// <remarks>
+/// Two kinds of count, because there are two samples. The percentiles here are raw milliseconds over
+/// every execution; the comparison that decides a regression reads one normalised reading per run,
+/// and a run can be missing from it — its own median was not positive, so nothing in it can be
+/// normalised, or the test itself took no measurable time in it. Publishing one count for both would
+/// let the evidence claim five runs behind a comparison made on one. The dispersion belongs to that
+/// second sample too, for the same reason: it qualifies the comparison, so it has to be over the
+/// readings the comparison made.
+/// </remarks>
+/// <param name="P50Ms">Median duration, in milliseconds.</param>
+/// <param name="P95Ms">95th percentile duration, in milliseconds.</param>
+/// <param name="ExecutionsConsidered">
+/// Executions the percentiles were computed over — not how many times the test ran in this slice.
+/// Add <paramref name="DiscountedEnvironmental"/> to reach that figure.
+/// </param>
+/// <param name="Sessions">
+/// Distinct runs those executions came from — a count of this slice and never of the window. Drawn
+/// from the same considered executions as <paramref name="ExecutionsConsidered"/>, so the slice's
+/// <paramref name="DiscountedEnvironmental"/> runs are already gone from it.
+/// </param>
+/// <param name="DiscountedEnvironmental">
+/// Executions of this slice set aside because their run looked like a broken machine rather than a
+/// broken test.
+/// </param>
+/// <param name="ComparedSessions">
+/// Runs the two-sample comparison actually read, one reading each. Never larger than
+/// <paramref name="Sessions"/>, and the count both the arm floors and the test itself were applied
+/// to.
+/// </param>
+/// <param name="ComparedDispersion">
+/// How widely this arm's own readings fall, per <see cref="RobustDispersion"/>, over exactly the
+/// <paramref name="ComparedSessions"/> runs the comparison read — one normalised reading each, and
+/// not the executions behind them. Published on both arms because it is the one thing the p-value
+/// beside it is blind to and is not calibrated against: relabelling the pooled readings is exact
+/// where the two arms are equally dispersed, and where the recent arm's figure is much the larger
+/// of the two the level is not a ceiling. A reader comparing the two numbers can see when a
+/// "slower" finding rests on a recent slice that was merely wilder; #187 has the measurement, and
+/// <c>known-limitations.md</c> states it in the reader's own terms.
+/// <para>
+/// Relative to this arm's own median, per <see cref="RobustDispersion"/>, and that is what makes
+/// the two figures comparable rather than an inconsistency. Every regression has a recent arm at
+/// least half again the baseline's level, by the gate that admitted it, so an absolute spread would
+/// read larger on the slower arm for no reason but its being the slower arm. Durations are
+/// perturbed multiplicatively and the effect size beside this is a ratio; on that scale two arms
+/// that vary alike read alike however far apart their levels are.
+/// </para>
+/// </param>
+internal sealed record DurationProfile(
+    long P50Ms,
+    long P95Ms,
+    int ExecutionsConsidered,
+    int Sessions,
+    int DiscountedEnvironmental,
+    int ComparedSessions,
+    double ComparedDispersion);
+
+/// <summary>
+/// The change in raw wall-clock terms — what a developer would notice on the clock.
+/// </summary>
+/// <param name="P50Pct">Relative increase in median duration, as a percentage.</param>
+/// <param name="P50Ms">Absolute increase in median duration, in milliseconds.</param>
+internal sealed record DurationDelta(double P50Pct, long P50Ms);
+
+/// <summary>
+/// How much slower the test now is, after per-session normalisation — the figures every threshold
+/// is actually applied to, and the test that admitted them.
+/// </summary>
+/// <remarks>
+/// Reported separately from <see cref="DurationDelta"/> because the two routinely disagree, and the
+/// disagreement is the point: a machine that was busy for the whole of the recent runs moves the raw
+/// figure and leaves this one alone.
+/// </remarks>
+/// <param name="Ratio">
+/// How many times slower, per <see cref="HodgesLehmann"/> — the median of every pairwise ratio
+/// between a recent run and a baseline run. 1 would be no change.
+/// </param>
+/// <param name="RatioLow">Lower end of the 95% interval on <paramref name="Ratio"/>.</param>
+/// <param name="RatioHigh">Upper end of that interval.</param>
+/// <param name="Pct">
+/// The same estimate as a percentage increase, for a reader who thinks in percentages. Exactly
+/// <c>(<paramref name="Ratio"/> − 1) × 100</c>, carried rather than derived so that nothing
+/// downstream has to do arithmetic on a published number.
+/// </param>
+/// <param name="Ms">
+/// The estimate in milliseconds at the test's reference speed — the ratio applied to the baseline's
+/// normalised level, multiplied back by the median of the medians of the runs the test appeared in.
+/// The figure the absolute floor is applied to, and the honest millisecond answer to "how much
+/// slower": a developer reads milliseconds, and these are the ones that do not move when the machine
+/// does.
+/// </param>
+/// <param name="PValue">
+/// How probable an ordering this favourable to the recent runs would be if the test had not slowed,
+/// per <see cref="BrunnerMunzel"/>. One-sided. Published so the claim can be checked, and floored by
+/// the number of ways the runs could have been arranged: three recent runs against seventeen cannot
+/// produce anything below 1/1140 however large the slowdown.
+/// </param>
+internal sealed record DurationShift(
+    double Ratio,
+    double RatioLow,
+    double RatioHigh,
+    double Pct,
+    long Ms,
+    double PValue);
+
+/// <summary>
+/// Evidence that a test's median duration has increased against its own baseline.
+/// </summary>
+/// <param name="Current">The recent runs.</param>
+/// <param name="Baseline">The runs before them.</param>
+/// <param name="Delta">The change in raw milliseconds.</param>
+/// <param name="Shift">
+/// The change after normalisation, with its interval and the test that admitted it — what every
+/// threshold was applied to.
+/// </param>
+/// <param name="FirstSeenAt">
+/// The commit of the oldest recent run this test appeared in — where the change crosses from the
+/// baseline into "now". Null when that run recorded no commit, never fabricated.
+/// </param>
+/// <param name="Exemplars">Up to three recent executions, newest first.</param>
+/// <param name="Contrast">One execution typical of the prior behaviour.</param>
+internal sealed record DurationRegressionEvidence(
+    DurationProfile Current,
+    DurationProfile Baseline,
+    DurationDelta Delta,
+    DurationShift Shift,
+    string? FirstSeenAt,
+    IReadOnlyList<DurationExemplar> Exemplars,
+    DurationExemplar? Contrast) : FindingEvidence;
+
+/// <summary>
+/// Evidence that a test's duration varies too much for a regression to be measurable.
+/// </summary>
+/// <param name="ExecutionsConsidered">
+/// Executions across the whole window, after environmental runs were set aside — not how many times
+/// the test ran. Add <paramref name="DiscountedEnvironmental"/> to reach that figure.
+/// </param>
+/// <param name="SessionsConsidered">
+/// Analysed runs, after the environmental ones were set aside. Not the window's run count, which is
+/// larger by however many runs were discounted and is in the report's header.
+/// </param>
+/// <param name="DiscountedEnvironmental">
+/// Executions set aside because their run looked like a broken machine rather than a broken test.
+/// </param>
+/// <param name="P50Ms">Median duration, in milliseconds.</param>
+/// <param name="P95Ms">95th percentile duration, in milliseconds.</param>
+/// <param name="MinMs">The fastest observed run, in milliseconds.</param>
+/// <param name="MaxMs">The slowest observed run, in milliseconds.</param>
+/// <param name="NormalisedExecutions">
+/// Executions that could be normalised — what <paramref name="Dispersion"/> was computed over,
+/// which is not always what the four raw figures above were.
+/// </param>
+/// <param name="NormalisedP50Ms">
+/// The median the trivial-duration floor read, in milliseconds at the test's reference speed:
+/// what it would take on the machine its own runs typically ran on. Not always over the same
+/// executions as <paramref name="P50Ms"/> beside it — the floor reads the baseline where the test
+/// has one and the window where it does not, so that a test cannot be measured against a size the
+/// slowdown being reported gave it — but always the figure the decision was made on, so this
+/// number and that decision cannot disagree.
+/// </param>
+/// <param name="Dispersion">
+/// Spread per <see cref="RobustDispersion"/>, computed on <b>normalised</b> durations — so this is a
+/// claim about the test varying relative to the suite around it, not about the machine having had a
+/// bad afternoon, which is the only claim the data supports. Robust rather than a coefficient of
+/// variation, so it describes what the test does most runs rather than what it did on its worst one.
+/// </param>
+/// <param name="Exemplars">Up to three executions chosen to span the observed spread.</param>
+internal sealed record DurationUnstableEvidence(
+    int ExecutionsConsidered,
+    int SessionsConsidered,
+    int DiscountedEnvironmental,
+    long P50Ms,
+    long P95Ms,
+    long MinMs,
+    long MaxMs,
+    int NormalisedExecutions,
+    long NormalisedP50Ms,
+    double Dispersion,
+    IReadOnlyList<DurationExemplar> Exemplars) : FindingEvidence;
+
+/// <summary>
+/// Reports how long tests take: whether one has slowed against its own history, and whether its
+/// timing is steady enough for that question to have an answer.
+/// </summary>
+/// <remarks>
+/// <para>
+/// One provider owns both kinds because they are two readings of one thing. Whether a test has
+/// slowed cannot be decided without accounting for how much its duration ordinarily moves, and a
+/// test whose duration moves so much that nobody can predict what it will cost is itself the
+/// finding. Splitting the provider would let both claim the same test off opposite readings of the
+/// same runs, and the ordering in <see cref="Analyze"/> is what stops that.
+/// </para>
+/// <para>
+/// <b>Whether a test has slowed is a two-sample question and is asked as one.</b> The recent runs
+/// and the runs before them are compared by <see cref="BrunnerMunzel"/>, which asks whether the
+/// recent slice is drawn from a slower distribution or is doing what the test always did, and the
+/// size of the change is <see cref="HodgesLehmann"/>'s ratio with the interval it was measured to.
+/// Its level holds where the two arms are equally dispersed and is exceeded where the recent slice
+/// is the wilder one, which #187 measures and owns — so both arms publish the spread of the
+/// readings the comparison made, and a reader meets that number beside the p-value rather than
+/// having to take the level on trust.
+/// Both are required: a statistically solid three percent is not worth a developer's morning, and a
+/// twofold gap over three runs that the test's own history contains is not a finding. There is no
+/// longer a dispersion gate on the baseline, because the only job it had was to stand in for the
+/// spread that the test now reads directly, and it read it on one arm only.
+/// </para>
+/// <para>
+/// Instability is a different claim and keeps its own threshold. A test can be reported as unstable
+/// without any question of a regression arising, and a test whose recent runs separate cleanly from
+/// a wide baseline is now reported as slower where it used to be silenced for having a wide
+/// baseline.
+/// </para>
+/// <para>
+/// <b>The comparison reads one duration per run and the dispersion reads every execution.</b> A
+/// two-sample test assumes its readings are independent, and three attempts of one test in one run
+/// are one occasion of evidence rather than three — the unit #179 put on every arm gate, carried
+/// here into the sample the gates are computed from. Instability makes no such assumption: it asks
+/// how much a test's timing moves, and an attempt that took longer than its neighbour is part of
+/// the answer however correlated the two are. So the two kinds count differently on purpose, and
+/// each publishes the count it used.
+/// </para>
+/// <para>
+/// <b>Every comparison is normalised per session.</b> Each execution's duration is divided by the
+/// median duration of the run it belongs to before any cross-run comparison. On a developer machine
+/// the dominant signal in raw milliseconds is the machine — a background build, thermal throttling,
+/// a CI runner under load — and it moves every test in a run together, which is exactly what
+/// dividing by the run's own median removes. Verified against the local store, where run medians for
+/// one assembly move by a factor of two to sixteen across a fortnight and reorder the findings.
+/// </para>
+/// <para>
+/// <b>And environmental runs are discounted anyway, which normalisation does not make redundant.</b>
+/// The two answer different questions. Normalisation removes a machine that was uniformly slow,
+/// because the run's median moves with every test in it. It does not remove a run in which a third
+/// of the suite fell over: there the median was computed over whichever tests survived, it is not
+/// the same population as any other run's median, and every surviving test is measured against a
+/// scale the failures moved. The recent slice is three runs, so one such run is a third of the
+/// evidence behind a regression — which is the case this discounting exists for, and the reason
+/// this provider no longer stands apart from every other rate-publishing kind. The cost is real and
+/// intended: a test whose recent slice is mostly environmental now falls under the arm floors and is
+/// silenced, and the arm counts published beside every finding are what say so.
+/// </para>
+/// <para>
+/// <b>Where a threshold is in milliseconds, they are milliseconds at the test's reference
+/// speed</b> — a normalised figure multiplied back by the median of the medians of the runs the
+/// test appeared in.
+/// Both kinds have such a floor, and both exist for the same reason: below a few tens of
+/// milliseconds a duration is measuring the scheduler. Reading that floor off raw milliseconds
+/// while deciding everything else on normalised ones puts the two gates on different scales, and
+/// they then disagree in exactly the case the normalisation exists for — a recent slice on a
+/// faster machine, where the raw median falls while the normalised one rises. Anchoring instead
+/// of dropping the floor keeps the number a developer recognises.
+/// </para>
+/// <para>
+/// The limit of that technique is worth knowing: a run median describes the run's <i>test set</i> as
+/// much as its speed, so runs executed under different filters normalise against different
+/// populations. Nothing here can distinguish the two, and no claim is made that it does.
+/// </para>
+/// <para>
+/// That anchoring is deliberately <i>not</i> expressed through
+/// <see cref="Xping.Core.Triage.Indexes.SessionView.IsPartial"/>, which is how the report classifies a run elsewhere.
+/// The classification is per run — a fact where the test framework reported one, a threshold against
+/// the window where it did not; this is per test and needs neither, because "the runs this test
+/// appeared in" is exactly the set a filtered run either joins or does not. Reading the flag instead would also throw away a perfectly good speed reading
+/// from a filtered run for the test that <i>was</i> selected in it. The flag is read once here, for
+/// the one question it answers better — whether the current slice asked about the test at all.
+/// </para>
+/// </remarks>
+internal sealed class DurationProvider : IFindingProvider
+{
+    // Three, per the output contract's exemplar budget. A per-provider constant rather than a shared
+    // threshold: the specification's constant table does not list it, and adding an entry there
+    // would be a threshold this session invented.
+    private const int MaxExemplars = 3;
+
+    // Named in the condition for a duration regression but absent from the shared constant table,
+    // so they stay local for the same reason as the exemplar budget above.
+    //
+    // Runs rather than executions, per #179: attempts of one test within a run are correlated, so
+    // a test that retried five times in one afternoon has one occasion of evidence and not five.
+    //
+    // The baseline figure is derived rather than chosen. Three recent runs against `n` baseline
+    // ones can be dealt C(n + 3, 3) ways, and the strongest thing the data can say -- every recent
+    // run slower than every run before it -- is one of them. At six that is 1/84 = 0.0119, which
+    // does not reach `RegressionAlpha`, so no arrangement of six baseline runs can produce a
+    // finding; at seven it is 1/120 = 0.0083, which does. Stating seven is the difference between
+    // declining and appearing to test. It was five while the comparison was a ratio of two medians,
+    // which could be computed from any two numbers and said nothing about how many were behind it.
+    private const int MinimumBaselineSessions = 7;
+    private const int MinimumCurrentSessions = 3;
+
+    // The p-value a slowdown has to clear. Local for the same reason as the counts above: the
+    // specification's constant table does not name it, and adding an entry there would be a
+    // threshold this session invented.
+    //
+    // Not the conventional 0.05, because this comparison is not made once. Every fingerprint in the
+    // window is tested, and #168 asks for a per-test false-positive rate under one in a hundred at
+    // every dispersion test durations take. Measured end to end over the whole gate chain, forty
+    // thousand windows per cell: 0.0004 at a true dispersion of 0.20 and 0.0096 at 0.70, against
+    // 0.05 and 0.047 at the conventional level.
+    //
+    // That is the rate where the two arms are equally dispersed, which is what the permutation
+    // calibration behind it is exact for. Where the recent slice is the more variable arm the level
+    // is not a ceiling and the rate rises above it -- 0.02 at twice the baseline's spread and 0.065
+    // at four times, with no slowdown present. #187 states the measurement and what can be done
+    // about it; the honest summary is that three recent readings cannot calibrate against an
+    // arbitrary difference in spread, and nothing available does.
+    //
+    // So the residual is published rather than left behind this number. Both arms carry their own
+    // `ComparedDispersion` in the evidence, over exactly the runs the comparison read, and the
+    // finding's metrics state the two side by side -- which is what lets a reader who meets a
+    // "slower" finding see for themselves whether the recent slice was merely the wilder arm.
+    // `known-limitations.md` says the same thing in the reader's own terms, and
+    // AFalseSlowdownFromAWilderRecentSlicePublishesTheSpreadThatCausedIt is what keeps those two
+    // numbers worth reading.
+    //
+    // What it costs is the shape that needs the most evidence anyway. A true doubling on a steady
+    // test is still reported 97% of the time against seventeen baseline runs and 89% against seven.
+    //
+    // A pre-filter, and no longer the final word: the coordinator now applies a Benjamini-Hochberg
+    // pass at `LocalAnalysisConstants.FalseDiscoveryRate` across every fingerprint this kind was
+    // tested on, and that bar is the one a finding has to clear. This one stays, deliberately. It is
+    // free where the pass is not -- the two expensive things below it never run on a test it
+    // declines -- and it cannot change the pass's answer, because the pass's own bar exceeds 0.01
+    // only where more than a tenth of the family are discoveries, at which point the report has
+    // larger news than a threshold. Removing it would buy nothing and cost the Hodges-Lehmann
+    // interval on every fingerprint in the suite.
+    private const double RegressionAlpha = 0.01;
+
+    // Runs either arm's sample is truncated to, most recent first. The exact test enumerates every
+    // way the pooled runs could have been split, which is C(n + k, k) for a recent arm of k, and
+    // `--runs` is unbounded -- so something has to stop it.
+    //
+    // This bound is not a property of forty alone. It is C(40 + `CurrentSliceSize`,
+    // `CurrentSliceSize`), which at the shipped slice of three is 12,341 arrangements and at a
+    // slice of five would be 1.2 million; the two constants have to move together, and
+    // TheEnumerationTheExactTestPerformsStaysBounded is the test that says so out loud rather than
+    // leaving the next reader to discover it as a hung report.
+    //
+    // At three it never binds on a default twenty-run window. What it costs is the difference
+    // between the fortieth-oldest run and the hundredth as evidence about a test's baseline, which
+    // is nothing: the comparison's power is capped by the runs on the other side. The published
+    // `Baseline.P50Ms` still covers the whole baseline, and `ComparedSessions` states the
+    // truncation where it happened.
+    private const int MaxComparedSessions = 40;
+
+    /// <inheritdoc/>
+    public string Name => "duration";
+
+    /// <inheritdoc/>
+    public IReadOnlyList<FindingKind> Kinds =>
+        [FindingKind.DurationRegression, FindingKind.DurationUnstable];
+
+    /// <inheritdoc/>
+    public ProviderReport Analyze(AnalysisContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var candidates = new List<FindingCandidate>();
+        int tested = 0;
+
+        // One tally per kind, because the two are declined by different gates over different
+        // samples: a test can be comparable and not dispersible, or the reverse. A single figure
+        // would be true of neither.
+        NotMeasuredCount regressionNotMeasured = default;
+        NotMeasuredCount unstableNotMeasured = default;
+
+        // Computed once for the whole window and shared by every test in a run, which is what makes
+        // the normalisation a property of the run rather than something each test re-derives.
+        Dictionary<Guid, double> medians = SessionMedians(context);
+
+        var currentSessions = new HashSet<Guid>(
+            context.Window.CurrentSlice.Select(s => s.SessionId));
+
+        // Whether the "now" side of the comparison is made entirely of runs that covered part of the
+        // suite, which is what a `dotnet test --filter` loop puts at the head of a local store.
+        bool currentSliceIsAllPartial =
+            context.Window.CurrentSlice.Count > 0 &&
+            context.Window.CurrentSlice.All(
+                session => context.SessionViewFor(session.SessionId)?.IsPartial == true);
+
+        // The tests the most recent runs that covered the suite did run. Only needed to tell a test
+        // a filter passed over from one that has genuinely gone, so it is derived only where that
+        // question arises — and derived from the same re-split `Vanished` reads, so the two cannot
+        // disagree about which runs were in a position to ask.
+        IReadOnlySet<string> askedRecently = currentSliceIsAllPartial
+            ? AnalysisWindowSlices.From(context).Current
+            : ImmutableHashSet<string>.Empty;
+
+        foreach (string fingerprint in context.Tests.Fingerprints)
+        {
+            // Counted against neither kind. The fingerprint and the reference come out of the same
+            // index, so this is an inconsistency inside it rather than a measurement the data
+            // declined — and there is no test to put a number against in any case.
+            TestReference? test = context.Tests.ReferenceFor(fingerprint);
+            if (test == null)
+                continue;
+
+            IReadOnlyList<ExecutionRef> everything = context.Tests.ExecutionsOf(fingerprint);
+
+            List<ExecutionRef> all = [];
+            List<ExecutionRef> current = [];
+            List<ExecutionRef> baseline = [];
+            int currentDiscounted = 0;
+            int baselineDiscounted = 0;
+
+            foreach (ExecutionRef reference in everything)
+            {
+                bool inCurrent = currentSessions.Contains(reference.Session.SessionId);
+
+                if (context.SessionViewFor(reference.Session.SessionId)?.IsLikelyEnvironmental == true)
+                {
+                    if (inCurrent)
+                        currentDiscounted++;
+                    else
+                        baselineDiscounted++;
+
+                    continue;
+                }
+
+                all.Add(reference);
+
+                if (inCurrent)
+                    current.Add(reference);
+                else
+                    baseline.Add(reference);
+            }
+
+            // A test that has stopped running is not a duration finding. Its absence is what is
+            // interesting about it, and that belongs to `Vanished` — claiming it here as well would
+            // report one disappearance twice under two names.
+            //
+            // Counted against neither kind, for the same reason. "Duration could not measure this
+            // test" is a true sentence about a test that has gone, and printing it would state the
+            // disappearance a second time in the summary, in a line whose whole purpose is to name
+            // questions whose answers are missing rather than questions that have been answered
+            // elsewhere.
+            //
+            // Unless no run that asked about this test is in the slice at all. Then there is no
+            // disappearance to state twice: `Vanished` sets filtered runs aside precisely so it
+            // does not claim one, so deferring to it charges the skip to a kind that is also
+            // silent, and the summary ends up asserting duration read every test it was offered.
+            // An absence from runs that never selected the test is a measurement waiting on a run
+            // of the suite, which is what `awaitingRuns` means, and both kinds want it — the
+            // comparison and the dispersion are equally starved by an empty "now".
+            //
+            // Asked per test and not per slice. A slice of nothing but filtered runs holds two
+            // kinds of absent test at once: the ones a filter passed over, which are still running
+            // whenever the suite is run in full, and the ones that have actually gone. Only the
+            // first is waiting on anything. Charging both would put every vanished test in this
+            // tally *and* in a `Vanished` finding — the same disappearance under two names, which
+            // is the thing this skip exists to avoid.
+            if (current.Count == 0)
+            {
+                if (askedRecently.Contains(fingerprint))
+                {
+                    regressionNotMeasured += new NotMeasuredCount(1, 0);
+                    unstableNotMeasured += new NotMeasuredCount(1, 0);
+                }
+
+                continue;
+            }
+
+            // The scale this test's own figures are expressed in. Per test rather than per window,
+            // because a run median is only a machine-speed reading among runs that ran the same
+            // tests: a window holding eight `--filter`ed runs of three fast tests and eight full
+            // ones has a window median of the filtered runs' speed, and multiplying by that would
+            // put every millisecond gate a factor of fifty out for tests that never ran in them.
+            double referenceMs = ReferenceMedian(all, medians);
+
+            // The whole window is only ever asked for its raw percentiles and its dispersion, so
+            // it is not asked to collapse itself to one reading per run: that is the comparison's
+            // sample, and building it for a slice nothing compares would be a sort and a dictionary
+            // per test for nobody.
+            Profile whole = Build(all, medians, comparable: false);
+            Profile currentProfile = Build(current, medians);
+            Profile baselineProfile = Build(baseline, medians);
+
+            Examination regression = Regression(
+                test,
+                current,
+                currentProfile,
+                baselineProfile,
+                referenceMs,
+                currentDiscounted,
+                baselineDiscounted);
+
+            if (regression.Tested)
+                tested++;
+            else
+                regressionNotMeasured += regression.NotMeasured;
+
+            Examination instability = Unstable(
+                context,
+                test,
+                all,
+                whole,
+                baselineProfile,
+                referenceMs,
+                currentDiscounted + baselineDiscounted);
+
+            unstableNotMeasured += instability.NotMeasured;
+
+            FindingCandidate? unstable = instability.Candidate;
+
+            // A regression suppresses the instability finding for the same test, and the two now
+            // overlap more than they used to: a test whose baseline swings and whose recent runs
+            // then step clear of all of it earns both, where the retired stability gate used to
+            // decline the first. The step is what lifted the whole window past the instability
+            // threshold, so reporting that as instability would state the regression a second time
+            // under another name. ARegressingTestIsNotAlsoReportedAsUnstable builds the sample that
+            // needs it.
+            //
+            // Offered to the coordinator as the alternative rather than dropped here, because the
+            // suppression is only right while the regression is reported. Whether it is turns on the
+            // multiplicity pass, which runs after every provider and which this one cannot see: a
+            // regression silenced there would otherwise take the instability finding down with it
+            // and leave a slow, wildly varying test entirely unmentioned.
+            FindingCandidate? candidate = regression.Candidate is { } slower
+                ? slower with { Instead = unstable }
+                : unstable;
+
+            if (candidate != null)
+                candidates.Add(candidate);
+        }
+
+        // `DurationUnstable` reports no family. It is a statement about how widely a test's own
+        // durations fall, decided on a dispersion and a floor rather than on a null hypothesis, so
+        // there is no p-value for a multiplicity correction to act on and no family to correct it
+        // against.
+        return new ProviderReport(
+            candidates,
+            new Dictionary<FindingKind, int> { [FindingKind.DurationRegression] = tested },
+            new Dictionary<FindingKind, NotMeasuredCount>
+            {
+                [FindingKind.DurationRegression] = regressionNotMeasured,
+                [FindingKind.DurationUnstable] = unstableNotMeasured
+            });
+    }
+
+    /// <summary>
+    /// Attempts the regression finding, saying both whether it was tested for and what survived.
+    /// </summary>
+    /// <param name="test">The test under consideration.</param>
+    /// <param name="current">Its executions in the recent slice.</param>
+    /// <param name="currentProfile">Those executions reduced to statistics.</param>
+    /// <param name="baselineProfile">The same for everything before them.</param>
+    /// <param name="referenceMs">The test's reference speed, in milliseconds.</param>
+    /// <param name="currentDiscounted">Recent executions set aside as environmental.</param>
+    /// <param name="baselineDiscounted">Earlier executions set aside as environmental.</param>
+    private static Examination Regression(
+        TestReference test,
+        List<ExecutionRef> current,
+        Profile currentProfile,
+        Profile baselineProfile,
+        double referenceMs,
+        int currentDiscounted,
+        int baselineDiscounted)
+    {
+        // Nothing to compare against is not a slowdown. A test added this week has history in the
+        // window but no history of its own, and calling that a regression would report every new
+        // test as one.
+        //
+        // Counted over the runs the comparison actually reads, which is the only count that cannot
+        // disagree with the claim. A run whose own median was not positive normalises nothing, and a
+        // run where the test itself took no measurable time contributes a reading no ratio can be
+        // taken against; either way the arm is thinner than its session count says.
+        // An arm that held runs and produced no reading from any of them. A run whose own median was
+        // not positive is no divisor, so a test whose recent or earlier runs are all of that shape
+        // contributes nothing to compare however many of them there are — and the next run of the
+        // same shape contributes nothing either. Separated from the floor below because the two are
+        // different news: this one is not answered by waiting, and telling a reader it is sends them
+        // back in a fortnight to be told the same thing.
+        if ((baselineProfile.Sessions > 0 && baselineProfile.Compared.Count == 0) ||
+            (currentProfile.Sessions > 0 && currentProfile.Compared.Count == 0))
+        {
+            return Examination.Unreadable;
+        }
+
+        if (baselineProfile.Compared.Count < MinimumBaselineSessions ||
+            currentProfile.Compared.Count < MinimumCurrentSessions)
+        {
+            return Examination.AwaitingRuns;
+        }
+
+        // Everything past this line is a test the provider ran on this fingerprint, and counts
+        // towards the family the coordinator corrects against — including the two gates below,
+        // which decline before a p-value is computed. Counting after them instead would describe a
+        // family selected on the size of the very effect the p-value measures, which is the one
+        // filter a multiplicity correction cannot be given: the p-values that were never computed
+        // are not absent from the family, only from the list, and omitting them costs power rather
+        // than validity.
+
+        // The cheap gates first, and the two expensive things last. Asking how much slower is a
+        // sorted list of at most a few hundred ratios; asking whether that is real enumerates every
+        // way the runs could have been split, and placing an interval around it builds the exact
+        // null distribution behind those arrangements. Ordering them this way keeps both off every
+        // test that could not qualify anyway, which in a real window is nearly all of them.
+        double ratio = HodgesLehmann.Ratio(baselineProfile.Compared, currentProfile.Compared);
+
+        if (ratio - 1 < LocalAnalysisConstants.DurationRegressionPct)
+            return Examination.Of(null);
+
+        // Guards the relative test on the scale a developer actually experiences: two milliseconds
+        // becoming four is a hundred-percent regression and is not worth anyone's morning. Measured
+        // through the same normalisation the relative test used, and multiplied back into
+        // milliseconds by the test's reference speed. In raw milliseconds this gate disagrees with
+        // the one above it precisely when the normalisation was doing its job: a recent slice on a
+        // faster machine can raise the normalised level while lowering the raw one, and a negative
+        // raw increase declines every real regression measured that way.
+        double baselineLevel = Quantile.Interpolated(baselineProfile.Compared, 0.50);
+        double increaseMs = (ratio - 1) * baselineLevel * referenceMs;
+
+        if (increaseMs < LocalAnalysisConstants.DurationRegressionMinMs)
+            return Examination.Of(null);
+
+        // And then the question itself: is the recent slice drawn from a slower distribution, or is
+        // this the variation the test already had? Nothing above asks it — a ratio of two medians
+        // says how far apart two numbers are and nothing about how far apart they routinely fall.
+        double pValue = BrunnerMunzel.OneSidedPValue(
+            baselineProfile.Compared, currentProfile.Compared);
+
+        if (pValue > RegressionAlpha)
+            return Examination.Of(null);
+
+        // Only now, for the handful of tests that survived all three.
+        RatioEstimate shift = HodgesLehmann.Of(baselineProfile.Compared, currentProfile.Compared);
+
+        return Examination.Of(new FindingCandidate(
+            FindingKind.DurationRegression,
+            new FindingSubject.SingleTest(test),
+            new DurationRegressionEvidence(
+                currentProfile.ToPublished(currentDiscounted),
+                baselineProfile.ToPublished(baselineDiscounted),
+                new DurationDelta(
+                    FindingOrder.RoundPercent(PercentIncrease(
+                        baselineProfile.RawP50, currentProfile.RawP50)),
+                    RoundMs(currentProfile.RawP50 - baselineProfile.RawP50)),
+                new DurationShift(
+                    FindingOrder.Round(shift.Ratio),
+                    FindingOrder.Round(shift.Low),
+                    FindingOrder.Round(shift.High),
+                    FindingOrder.RoundPercent((shift.Ratio - 1) * 100),
+                    RoundMs(increaseMs),
+                    Probability(pValue)),
+                FirstSeenAt(current),
+                Recent(current),
+                Contrast(baselineProfile)),
+
+            // The lower end of the interval rather than the estimate itself, for the reason #178
+            // gave every kind that ranks on a proportion: a fourfold slowdown measured over three
+            // runs against seven and one measured over three against seventeen are not the same
+            // finding, and only the interval knows it. Doubling is as unreliable as this measure
+            // gets — beyond that the test is simply slow, and ranking a tenfold slowdown above a
+            // twofold one would crowd out every other kind on one arithmetic accident.
+            Unreliability: Math.Clamp((shift.Low - 1) / 2, 0, 1.0),
+
+            LastOccurrenceIn: TestIndex.NewestSession(current),
+
+            // The runs the two-sample test actually read, both arms — the same two figures the
+            // evidence publishes as `comparedSessions`. Narrower than the runs the test appeared in
+            // twice over: a run whose own median was not positive normalises nothing, and a long
+            // baseline is capped at `MaxComparedSessions`.
+            EvidenceSessions:
+                baselineProfile.Compared.Count + currentProfile.Compared.Count,
+
+            PValue: pValue));
+    }
+
+    /// <summary>
+    /// Rounds a millisecond figure for publication.
+    /// </summary>
+    /// <remarks>
+    /// Rounded rather than truncated. Every published millisecond here is the product of a ratio and
+    /// a scale, and a cast would report a six-hundred-millisecond slowdown as 599 whenever that
+    /// product landed a bit under — an off-by-one a reader cannot explain and cannot check against
+    /// the exemplars beside it.
+    /// </remarks>
+    private static long RoundMs(double value) =>
+        (long)Math.Round(value, MidpointRounding.AwayFromZero);
+
+    /// <summary>
+    /// Rounds a p-value for publication.
+    /// </summary>
+    /// <remarks>
+    /// Six decimals rather than the three <see cref="FindingOrder.Round"/> gives every other
+    /// published figure. A p-value here is bounded below by one over the number of ways the runs
+    /// could have been dealt, and a long baseline makes that number small: forty runs against three
+    /// floors it at 1/12341, which three decimals would publish as zero. A probability of zero is a
+    /// claim of certainty, and this measurement never makes one.
+    /// </remarks>
+    private static double Probability(double value) =>
+        Math.Round(value, 6, MidpointRounding.AwayFromZero);
+
+    /// <summary>
+    /// Attempts the instability finding, saying both whether it could be measured and what
+    /// survived.
+    /// </summary>
+    /// <remarks>
+    /// Measured over the whole window rather than either slice. Instability is a standing property
+    /// of a test, not a change between two halves of its history, and splitting the window would
+    /// only halve the evidence behind it.
+    /// </remarks>
+    private static Examination Unstable(
+        AnalysisContext context,
+        TestReference test,
+        IReadOnlyList<ExecutionRef> all,
+        Profile whole,
+        Profile baselineProfile,
+        double referenceMs,
+        int discountedEnvironmental)
+    {
+        // Nothing to take a dispersion of. `RobustDispersion.Of` answers zero both for a sample too
+        // short to have a spread and for one whose median is not positive, so reading the gate below
+        // without asking this first reports a test whose every run recorded a zero median as
+        // perfectly steady — which is #185's own example, and the reason it was filed. An unmeasured
+        // test and a steady one are opposite pieces of news and they used to print the same way,
+        // which is to say they used to print as nothing at all.
+        if (whole.Normalised.Count == 0 || whole.NormalisedP50 <= 0)
+            return Examination.Unreadable;
+
+        // One normalised reading is a point, not a spread. More runs give it one.
+        if (whole.Normalised.Count < 2)
+            return Examination.AwaitingRuns;
+
+        double dispersion = RobustDispersion.Of(whole.Normalised);
+        if (dispersion < LocalAnalysisConstants.DurationUnstableDispersionMin)
+            return Examination.Of(null);
+
+        // The test's own prior behaviour where it has any, and the window where it does not. A test
+        // first seen this week has no baseline, and refusing to measure it at all would make its
+        // instability invisible for as long as the window takes to fill.
+        Profile against = baselineProfile.NormalisedExecutions > 0 ? baselineProfile : whole;
+
+        // In milliseconds at the test's reference speed, not raw ones. The dispersion this floor
+        // qualifies is measured on normalised durations, and a floor read off the clock answers a
+        // different question from the statistic it is guarding: a test that takes 30ms on the fast
+        // machine its runs happened on is not a trivial test, and one reading 200ms on a machine
+        // labouring at a fifth of the window's speed is.
+        double floor = against.NormalisedP50 * referenceMs;
+
+        // No run this test appeared in had a usable median, so there is no scale to express the
+        // floor in and the product below is zero for a reason that has nothing to do with the test
+        // being quick. Implied by the guard above — both readings come from the same missing
+        // medians — but computed over `all` rather than over `whole`, and a floor that declines
+        // every millisecond gate is worth saying out loud where it happens.
+        if (referenceMs <= 0)
+            return Examination.Unreadable;
+
+        // Below a few tens of milliseconds the dispersion is measuring the scheduler, not the test.
+        if (floor < LocalAnalysisConstants.DurationTrivialMs)
+            return Examination.Of(null);
+
+        return Examination.Of(new FindingCandidate(
+            FindingKind.DurationUnstable,
+            new FindingSubject.SingleTest(test),
+            new DurationUnstableEvidence(
+                whole.Executions,
+                context.Window.SessionCount - context.EnvironmentalSessionCount,
+                discountedEnvironmental,
+                RoundMs(whole.RawP50),
+                RoundMs(whole.RawP95),
+                RoundMs(whole.RawMin),
+                RoundMs(whole.RawMax),
+                whole.NormalisedExecutions,
+                RoundMs(floor),
+                FindingOrder.Round(dispersion),
+                Spanning(all, whole.RawP50)),
+
+            // The dispersion itself, capped. A test whose typical run sits two thirds of its own
+            // median away from it is as unpredictable as this measure can express, and everything
+            // past that is the same finding with a larger number on it.
+            Unreliability: Math.Min(1.0, dispersion),
+
+            LastOccurrenceIn: TestIndex.NewestSession(all),
+
+            // The runs behind the normalised readings, which is what the dispersion was computed
+            // over. Two normalisable readings of 1 and 10 clear the dispersion floor on their own,
+            // and a test present in five runs and normalisable in two holds two runs of evidence.
+            EvidenceSessions: whole.NormalisedSessions));
+    }
+
+    /// <summary>
+    /// Reads the commit the change crossed into "now" at.
+    /// </summary>
+    /// <remarks>
+    /// Taken from the oldest recent run <i>this test appeared in</i>, not simply the oldest recent
+    /// run. A test need not execute in every run, and naming a commit that never ran it would
+    /// attribute the change to the wrong place.
+    /// </remarks>
+    private static string? FirstSeenAt(List<ExecutionRef> current)
+    {
+        ExecutionRef oldest = current[0];
+
+        foreach (ExecutionRef reference in current)
+        {
+            if (reference.SessionIndex > oldest.SessionIndex)
+                oldest = reference;
+        }
+
+        return RevisionContext.ReadSha(oldest.Session);
+    }
+
+    /// <summary>
+    /// Picks up to three recent executions, newest first.
+    /// </summary>
+    private static List<DurationExemplar> Recent(List<ExecutionRef> current) =>
+        [.. Ordered(current).Take(MaxExemplars).Select(ToExemplar)];
+
+    /// <summary>
+    /// Picks up to three executions chosen to make the observed spread legible.
+    /// </summary>
+    /// <remarks>
+    /// The fastest, the most typical and the slowest, rather than the three most recent. Three
+    /// exemplars that all sit near the median describe a test that looks perfectly steady, which is
+    /// the opposite of what this finding claims.
+    /// </remarks>
+    private static List<DurationExemplar> Spanning(IReadOnlyList<ExecutionRef> all, double p50)
+    {
+        ExecutionRef?[] chosen =
+        [
+            Nearest(all, e => -Milliseconds(e)),
+            Nearest(all, e => Math.Abs(Milliseconds(e) - p50)),
+            Nearest(all, e => Milliseconds(e))
+        ];
+
+        var ids = new HashSet<Guid>();
+        List<ExecutionRef> spread = [];
+
+        foreach (ExecutionRef? reference in chosen)
+        {
+            if (reference != null && ids.Add(reference.Execution.ExecutionId))
+                spread.Add(reference);
+        }
+
+        // Presented newest first, as every other kind's exemplars are, so a reader comparing two
+        // findings is not silently reading two different orderings.
+        return [.. Ordered(spread).Select(ToExemplar)];
+    }
+
+    /// <summary>
+    /// Picks the execution scoring lowest on a key, breaking every tie totally.
+    /// </summary>
+    private static ExecutionRef? Nearest(
+        IReadOnlyList<ExecutionRef> executions, Func<ExecutionRef, double> key) =>
+        executions
+            .OrderBy(key)
+            .ThenBy(e => e.SessionIndex)
+            .ThenBy(e => e.Execution.ExecutionId.ToString("N", CultureInfo.InvariantCulture),
+                StringComparer.Ordinal)
+            .FirstOrDefault();
+
+    /// <summary>
+    /// Picks one baseline execution typical of the prior behaviour.
+    /// </summary>
+    /// <remarks>
+    /// The one nearest the baseline median rather than the newest, because the pair only makes the
+    /// change reasonable about if the "before" half is representative of before — an unluckily slow
+    /// baseline run next to a regressed one understates the difference it exists to show.
+    /// </remarks>
+    private static DurationExemplar? Contrast(Profile baseline)
+    {
+        ExecutionRef? typical = Nearest(
+            baseline.Source, e => Math.Abs(Milliseconds(e) - baseline.RawP50));
+
+        // Absent rather than null-filled when there is nothing to contrast against: a consumer
+        // cannot tell an empty field apart from analysis that looked and found nothing.
+        return typical == null ? null : ToExemplar(typical);
+    }
+
+    private static IOrderedEnumerable<ExecutionRef> Ordered(IReadOnlyList<ExecutionRef> executions) =>
+        executions
+            .OrderBy(e => e.SessionIndex)
+            .ThenBy(e => e.Execution.Retry?.AttemptNumber ?? 1)
+            .ThenBy(e => e.Execution.ExecutionId.ToString("N", CultureInfo.InvariantCulture),
+                StringComparer.Ordinal);
+
+    private static DurationExemplar ToExemplar(ExecutionRef reference) =>
+        new(
+            reference.Session.SessionId.ToString("D", CultureInfo.InvariantCulture),
+            reference.Session.StartedAt,
+            RevisionContext.ReadSha(reference.Session),
+            reference.Execution.Outcome.ToString(),
+            RoundMs(Milliseconds(reference)));
+
+    private static double Milliseconds(ExecutionRef reference) =>
+        reference.Execution.Duration.TotalMilliseconds;
+
+    /// <summary>
+    /// Computes the median duration of every run in the window.
+    /// </summary>
+    /// <remarks>
+    /// A run whose median is not positive is left out entirely rather than recorded as zero: it
+    /// would divide every duration in that run to infinity, and one such run would dominate every
+    /// statistic computed from the window.
+    /// </remarks>
+    private static Dictionary<Guid, double> SessionMedians(AnalysisContext context)
+    {
+        var medians = new Dictionary<Guid, double>(context.Window.SessionCount);
+
+        foreach (var session in context.Window.Sessions)
+        {
+            var durations = new List<double>(session.Executions.Count);
+            foreach (var execution in session.Executions)
+                durations.Add(execution.Duration.TotalMilliseconds);
+
+            durations.Sort();
+
+            double median = Quantile.Interpolated(durations, 0.50);
+            if (median > 0)
+                medians[session.SessionId] = median;
+        }
+
+        return medians;
+    }
+
+    /// <summary>
+    /// Reads the reference speed for one test: the median of the medians of the runs it appeared
+    /// in, in milliseconds.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The anchor a normalised figure is multiplied by to become milliseconds again — the same
+    /// divisors that produced the ratios, reduced to one number, so the product reconstructs
+    /// milliseconds on a machine speed the test was actually measured at.
+    /// </para>
+    /// <para>
+    /// One value across both slices rather than one each, which is what makes the two sides of a
+    /// comparison expressible in the same units: anchoring each slice to its own machine would
+    /// reintroduce the difference the normalisation just removed.
+    /// </para>
+    /// <para>
+    /// Over the runs the test appeared in rather than the whole window, because a run median is a
+    /// machine-speed reading only among runs that ran the same tests. Runs under a
+    /// <c>--filter</c> are ordinary in a local store and hold a handful of fast tests, so a window
+    /// with more of them than full runs has a window-wide median of their speed — a number about
+    /// the store rather than about any machine, and one that would put every millisecond gate
+    /// orders out for every test absent from them.
+    /// </para>
+    /// <para>
+    /// A median rather than a mean, so one unusual run moves it as little as it moves anything
+    /// else here, and zero when no run the test appeared in had a usable median, which declines
+    /// every millisecond gate.
+    /// </para>
+    /// </remarks>
+    private static double ReferenceMedian(
+        IReadOnlyList<ExecutionRef> executions, Dictionary<Guid, double> medians)
+    {
+        var seen = new HashSet<Guid>();
+        var values = new List<double>();
+
+        // One reading per run, not per execution: a run that retried three times describes one
+        // machine once.
+        foreach (ExecutionRef reference in executions)
+        {
+            if (seen.Add(reference.Session.SessionId) &&
+                medians.TryGetValue(reference.Session.SessionId, out double median))
+            {
+                values.Add(median);
+            }
+        }
+
+        values.Sort();
+
+        return Quantile.Interpolated(values, 0.50);
+    }
+
+    /// <summary>
+    /// Reduces a set of executions to the statistics both kinds are decided on.
+    /// </summary>
+    /// <param name="executions">The executions.</param>
+    /// <param name="medians">Median duration of every run in the window.</param>
+    /// <param name="comparable">
+    /// Whether to collapse the runs to the one-reading-each sample the two-sample comparison reads.
+    /// False for a slice that is only asked for percentiles and dispersion.
+    /// </param>
+    private static Profile Build(
+        List<ExecutionRef> executions,
+        Dictionary<Guid, double> medians,
+        bool comparable = true)
+    {
+        var raw = new List<double>(executions.Count);
+        var normalised = new List<double>(executions.Count);
+        var sessions = new HashSet<Guid>();
+
+        // The runs behind `normalised`, which are fewer than `sessions` whenever a run recorded no
+        // positive median of its own — the xUnit adapter produces one for a failure raised outside
+        // the timed invocation, and a run made mostly of those normalises nothing.
+        var normalisedSessions = new HashSet<Guid>();
+
+        // One entry per run the test appeared in, holding every attempt it made there. Kept in the
+        // order the runs are reached so the truncation below can take the most recent ones.
+        var perSession = new List<(int Index, Guid Session, List<double> Attempts)>();
+        var positions = new Dictionary<Guid, int>();
+
+        foreach (ExecutionRef reference in executions)
+        {
+            raw.Add(Milliseconds(reference));
+            sessions.Add(reference.Session.SessionId);
+
+            if (medians.TryGetValue(reference.Session.SessionId, out double median))
+            {
+                normalised.Add(Milliseconds(reference) / median);
+                normalisedSessions.Add(reference.Session.SessionId);
+            }
+
+            if (!comparable)
+                continue;
+
+            if (!positions.TryGetValue(reference.Session.SessionId, out int position))
+            {
+                position = perSession.Count;
+                positions[reference.Session.SessionId] = position;
+                perSession.Add((reference.SessionIndex, reference.Session.SessionId, []));
+            }
+
+            perSession[position].Attempts.Add(Milliseconds(reference));
+        }
+
+        // Sorted before anything is computed from them, so every percentile brackets the same pair of
+        // readings and every sum accumulates in the same order on every run.
+        raw.Sort();
+        normalised.Sort();
+
+        return new Profile(
+            executions,
+            raw,
+            normalised,
+            sessions.Count,
+            normalisedSessions.Count,
+            Compared(perSession, medians));
+    }
+
+    /// <summary>
+    /// Reduces a test's runs to the sample the two-sample comparison reads: one normalised reading
+    /// each, most recent runs first, capped, ascending.
+    /// </summary>
+    /// <param name="perSession">Every run the test appeared in, with the attempts it made there.</param>
+    /// <param name="medians">Median duration of every run in the window.</param>
+    /// <remarks>
+    /// <para>
+    /// <b>One reading per run rather than one per execution.</b> Attempts of a test within a run are
+    /// correlated — the same machine, the same minute, often the same cause — and the test this
+    /// feeds assumes its readings are independent. Handing it three attempts as three observations
+    /// would let one bad afternoon count three times and understate the p-value accordingly. This is
+    /// the unit #179 put on every arm gate, carried into the sample the gates are computed from.
+    /// </para>
+    /// <para>
+    /// The run's own reading is the median of its attempts, by the same interpolating definition
+    /// every other percentile here uses. What this feeds is a two-sample test, and a test wants the
+    /// middle of the attempts rather than one of them: a run that made two attempts has no central
+    /// one, and taking the faster of the two would report every such run as quicker than it was.
+    /// </para>
+    /// <para>
+    /// Truncated to <see cref="MaxComparedSessions"/>, which is why the runs are ordered before
+    /// they are read: a capped arm keeps its most recent runs and not an arbitrary forty.
+    /// </para>
+    /// <para>
+    /// Readings that are not strictly positive are left out. They cannot carry a ratio — a test that
+    /// took no measurable time has no factor by which it later became slower — and the xUnit adapter
+    /// records exactly that for a failure raised outside the timed invocation. Dropping them here
+    /// rather than guarding a division later is what keeps the arm floors counting the same runs the
+    /// comparison reads.
+    /// </para>
+    /// </remarks>
+    private static List<double> Compared(
+        List<(int Index, Guid Session, List<double> Attempts)> perSession,
+        Dictionary<Guid, double> medians)
+    {
+        // Newest first, so a truncated baseline keeps its most recent runs. Ties cannot occur —
+        // a session index identifies a run — but the identifier breaks them anyway, because two
+        // reports over one store have to agree down to the byte.
+        perSession.Sort((left, right) =>
+            left.Index != right.Index
+                ? left.Index.CompareTo(right.Index)
+                : left.Session.CompareTo(right.Session));
+
+        var compared = new List<double>(perSession.Count);
+
+        foreach ((_, Guid session, List<double> attempts) in perSession)
+        {
+            if (compared.Count == MaxComparedSessions)
+                break;
+
+            if (!medians.TryGetValue(session, out double median))
+                continue;
+
+            attempts.Sort();
+
+            double reading = Quantile.Interpolated(attempts, 0.50) / median;
+            if (reading > 0)
+                compared.Add(reading);
+        }
+
+        compared.Sort();
+
+        return compared;
+    }
+
+    /// <summary>
+    /// Computes a relative increase, guarding the division.
+    /// </summary>
+    private static double PercentIncrease(double before, double after) =>
+        before <= 0 ? 0 : (after - before) / before * 100;
+
+    /// <summary>
+    /// One set of executions reduced to the statistics both kinds are decided on.
+    /// </summary>
+    /// <param name="Source">The executions themselves, for exemplar selection.</param>
+    /// <param name="Raw">Durations in milliseconds, ascending.</param>
+    /// <param name="Normalised">
+    /// Every execution's duration over its own run's median, ascending. What the dispersion behind
+    /// the instability finding is measured on: instability is a claim about how much a test's
+    /// timing moves, and an attempt that took a different length of time from its neighbour is part
+    /// of that however correlated the two are.
+    /// </param>
+    /// <param name="Sessions">Distinct runs the executions came from.</param>
+    /// <param name="NormalisedSessions">
+    /// Distinct runs behind <paramref name="Normalised"/> — the occasions the dispersion rests on,
+    /// which is what the instability finding's evidence level is banded from. A strict subset of
+    /// <paramref name="Sessions"/>: a run with no positive median of its own contributes raw
+    /// readings and no normalised ones.
+    /// </param>
+    /// <param name="Compared">
+    /// One normalised reading per run, ascending. What the two-sample comparison reads, and a
+    /// strict subset of the runs behind <paramref name="Normalised"/> — see <c>Compared</c>.
+    /// </param>
+    private sealed record Profile(
+        IReadOnlyList<ExecutionRef> Source,
+        List<double> Raw,
+        List<double> Normalised,
+        int Sessions,
+        int NormalisedSessions,
+        List<double> Compared)
+    {
+        public int Executions => Raw.Count;
+
+        public int NormalisedExecutions => Normalised.Count;
+
+        public double RawP50 => Quantile.Interpolated(Raw, 0.50);
+
+        public double RawP95 => Quantile.Interpolated(Raw, 0.95);
+
+        public double RawMin => Raw.Count == 0 ? 0 : Raw[0];
+
+        public double RawMax => Raw.Count == 0 ? 0 : Raw[^1];
+
+        public double NormalisedP50 => Quantile.Interpolated(Normalised, 0.50);
+
+        /// <summary>
+        /// How widely this arm's own comparison readings fall.
+        /// </summary>
+        /// <remarks>
+        /// Over <see cref="Compared"/> and deliberately not over <see cref="Normalised"/>, which is
+        /// the sample <see cref="FindingKind.DurationUnstable"/> reads. The two are different
+        /// questions and the counts behind them differ on purpose: instability asks how much a
+        /// test's timing moves and an attempt is part of that answer, while this one qualifies a
+        /// comparison that read one reading per run and would misdescribe it if it counted more.
+        /// <para>
+        /// The same small-sample-corrected statistic the instability finding is decided on, whose
+        /// median-unbiasing table starts at two readings — so it is defined at the three-run arm
+        /// floor rather than needing a special case there.
+        /// </para>
+        /// </remarks>
+        public double ComparedDispersion => RobustDispersion.Of(Compared);
+
+        public DurationProfile ToPublished(int discountedEnvironmental) =>
+            new(
+                RoundMs(RawP50),
+                RoundMs(RawP95),
+                Executions,
+                Sessions,
+                discountedEnvironmental,
+                Compared.Count,
+                FindingOrder.Round(ComparedDispersion));
+    }
+}

@@ -51,6 +51,8 @@
     <OutputType>Exe</OutputType>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <!-- CA1515: xUnit needs public test classes. CA1707: underscores in test names. CA2007: no ConfigureAwait in tests. -->
-    <NoWarn>$(NoWarn);CA1515;CA1707;CA2007</NoWarn>
+    <!-- xUnit1051: the tests migrated from sdk-dotnet predate xUnit v3's TestContext cancellation token.
+         CA1859: tests call internal services through their interface on purpose. -->
+    <NoWarn>$(NoWarn);CA1515;CA1707;CA2007;CA1859;xUnit1051</NoWarn>
   </PropertyGroup>
 </Project>
