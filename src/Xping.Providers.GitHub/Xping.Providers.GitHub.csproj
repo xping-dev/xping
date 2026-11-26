@@ -8,4 +8,15 @@
     <ProjectReference Include="..\Xping.Providers.Abstractions\Xping.Providers.Abstractions.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The only outbound HTTP in Xping: this provider's own API, with the CI job's token. -->
+    <PackageReference Include="Microsoft.Extensions.Http" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Xping.Providers.GitHub.Tests" />
+    <InternalsVisibleTo Include="xping" />
+    <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
+  </ItemGroup>
+
 </Project>
