@@ -1,0 +1,6 @@
+- name: GitHub Actions
+  href: github.md
+- name: GitLab CI
+  href: gitlab.md
+- name: Azure Pipelines
+  href: azure-devops.md

@@ -1,0 +1,40 @@
+# xping check: Check a merge request for weakened tests.
+spec:
+  inputs:
+    version:
+      description: Exact xping version, e.g. 2.0.0-alpha.1. Pinned on purpose; there is no "latest".
+    stage:
+      default: test
+    image:
+      description: Image to run. Pin it by digest for production (ghcr.io/xping-dev/xping@sha256:...).
+      default: ghcr.io/xping-dev/xping
+    results:
+      description: Test result files or globs (JUnit XML, TRX, Xping session), separated by spaces.
+      default: '**/TestResults/*.trx'
+    args:
+      description: Extra arguments for xping check.
+      default: ''
+    token_variable:
+      description: >
+        Name of the CI/CD variable that holds the Project access token (scope: api) used to post the merge request note. Defaults to $XPING_GITLAB_TOKEN; CI_JOB_TOKEN cannot post notes.
+      default: XPING_GITLAB_TOKEN
+---
+xping-check:
+  stage: $[[ inputs.stage ]]
+  image:
+    name: $[[ inputs.image ]]:$[[ inputs.version ]]
+    entrypoint: ['']
+  variables:
+    XPING_TOKEN_VARIABLE: $[[ inputs.token_variable ]]
+    XPING_RESULTS: $[[ inputs.results ]]
+    XPING_ARGS: $[[ inputs.args ]]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  script:
+    # TODO(spec): the variable xping reads for the provider token, and fork MR handling.
+    - export GITLAB_TOKEN="$(printenv "$XPING_TOKEN_VARIABLE" || true)"
+    # Patterns go to xping as written; the shell must not expand them.
+    - set -f
+    - set -- $XPING_ARGS
+    - for pattern in $XPING_RESULTS; do set -- "$@" --results "$pattern"; done
+    - xping check "$@"

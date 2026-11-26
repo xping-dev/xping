@@ -1,0 +1,29 @@
+# CI for the component project itself: use the components from this commit, then publish a
+# CI/CD Catalog release for version tags.
+include:
+  - component: $CI_SERVER_FQDN/$CI_PROJECT_PATH/check@$CI_COMMIT_SHA
+    inputs:
+      version: 2.0.0-alpha.1
+      args: --local
+
+stages: [test, release]
+
+# Until xping check is implemented it exits 69 (not implemented).
+xping-check:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  allow_failure:
+    exit_codes: [69]
+
+create-release:
+  stage: release
+  # TODO: pin by digest when the project is created.
+  image: registry.gitlab.com/gitlab-org/cli:latest
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/
+  script:
+    - echo "Releasing the xping components $CI_COMMIT_TAG"
+  release:
+    tag_name: $CI_COMMIT_TAG
+    description: xping CI/CD components $CI_COMMIT_TAG

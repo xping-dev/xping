@@ -1,0 +1,10 @@
+- name: Getting started
+  href: getting-started/
+- name: CI setup
+  href: ci/
+- name: Rules
+  href: rules/
+- name: Reference
+  href: reference/
+- name: Xping SDK (.NET)
+  href: sdk/

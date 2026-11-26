@@ -1,0 +1,35 @@
+# xping compact: Roll raw history runs up into baselines and prune old runs. Run it from a scheduled pipeline.
+spec:
+  inputs:
+    version:
+      description: Exact xping version, e.g. 2.0.0-alpha.1. Pinned on purpose; there is no "latest".
+    stage:
+      default: test
+    image:
+      description: Image to run. Pin it by digest for production (ghcr.io/xping-dev/xping@sha256:...).
+      default: ghcr.io/xping-dev/xping
+    args:
+      description: Extra arguments for xping compact.
+      default: ''
+    token_variable:
+      description: >
+        Name of the CI/CD variable that holds the Project access token (scope: write_repository) used to push the history branch. Defaults to $XPING_GITLAB_TOKEN.
+      default: XPING_GITLAB_TOKEN
+---
+xping-compact:
+  stage: $[[ inputs.stage ]]
+  image:
+    name: $[[ inputs.image ]]:$[[ inputs.version ]]
+    entrypoint: ['']
+  variables:
+    XPING_TOKEN_VARIABLE: $[[ inputs.token_variable ]]
+    XPING_ARGS: $[[ inputs.args ]]
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    # TODO(spec): the variable xping reads for the provider token, and fork MR handling.
+    - export GITLAB_TOKEN="$(printenv "$XPING_TOKEN_VARIABLE" || true)"
+    # Patterns go to xping as written; the shell must not expand them.
+    - set -f
+    - set -- $XPING_ARGS
+    - xping compact "$@"

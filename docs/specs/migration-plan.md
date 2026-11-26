@@ -1,6 +1,6 @@
 # Migration plan: sdk-dotnet + dashboard → xping-dev/xping
 
-> Status: **Phase 4 in review on `ci/release` (§7)** · 2026-11-26
+> Status: **Phase 5 prepared on `docs/followups` (§7, §8)** · 2026-11-26
 > Source of truth: [`xping-redesign-prespec.md`](xping-redesign-prespec.md). (The task brief calls it `redesign-prespec.md`; the file in the repo is `xping-redesign-prespec.md`.)
 > This file will be updated through Phases 2–5 to show what was actually done, including deviations.
 
@@ -308,6 +308,49 @@ One-time setup before the first tag `v2.0.0-alpha.1`:
 4. **Repository settings:** enable private vulnerability reporting (SECURITY.md). Optionally add required reviewers to the `release` environment.
 5. **nuget.org:** request the `Xping.*` ID prefix reservation (§5).
 
+### Phase 5: docs and cross-repo follow-ups (branch `docs/followups`, prepared, not executed)
+
+Drafts under `docs/specs/followups/` (index: `followups/README.md`):
+
+| Draft | State |
+|---|---|
+| `docs-repo/`: skeleton for public `xping-dev/docs` | docfx 2.81.0 site with sections (getting started, CI setup, rules, reference, SDK), `scripts/import-reference.sh <tag>`, which imports `docs/reference/*.md` and `schema/*.json` from this repo at the tag in `xping-version.txt`, and a Pages workflow with pinned actions. Built locally against `main`: 0 warnings, 0 errors. |
+| `sdk-dotnet-readme-note.md` | README banner pointing to this repo, plus what to delete in sdk-dotnet afterwards. Wording about Xping Cloud itself is a TODO(decision), prespec §11.12. |
+| `nuget-deprecation.md` | Deprecation of `Xping.Cli` 1.0.0-rc.1…rc.8: reason Legacy, alternative 2.0.0-alpha.1, a 495-character message. Not unlisted (Q4). |
+| `sdk-on-xping-session.md` | The steps: a public writer API in `Xping.Session` with API-compat checks, then sdk-dotnet replaces its model/store copies with the package. Risks included. |
+| `action/`: skeleton for `xping-dev/action` | Composite `action.yml` at the root, `command: check \| record \| compact`, exact `version`. It downloads the release binary for the runner, checks it against `SHA256SUMS`, runs `gh attestation verify --signer-workflow` and then the CLI. Inputs reach the scripts only through env. A smoke workflow covers 4 OSes. Scripts are shellcheck-clean, the workflow actionlint-clean. |
+| `gitlab-component/`: skeleton for a gitlab.com Catalog project | Three components (`check`, `record`, `compact`; GitLab rules cannot branch on an input), each running the pinned image. Self-test and Catalog release in `.gitlab-ci.yml`. YAML parses. Not linted with GitLab's CI lint (needs a gitlab.com project). |
+
+| Deviation | Why |
+|---|---|
+| The docs site moves to `xping-dev/docs`, not into this repo's `docs/` | Q6. This repo keeps specs and the reference pages generated next to the code. |
+| The SDK docs are not copied yet | `feat/docs-overhaul` (15 commits) is unmerged in sdk-dotnet. Merge it there first, then move the pages (§8, step 2). |
+| GitLab ships three components, not one with `command` | GitLab `rules:` cannot test an input value, and each command needs different rules. |
+| The action verifies provenance with `gh attestation verify`, not cosign | `gh` is preinstalled on GitHub runners and verifies the same Sigstore-backed attestation, with no extra download. cosign bundles stay available for users (`docs/reference/verifying-releases.md`). |
+
 ## 8. docs.xping.io switch steps
 
-_Filled in during Phase 5._
+Today: `docs.xping.io` is a DNS CNAME to `xping-dev.github.io`. GitHub Pages of **xping-dev/sdk-dotnet** claims the custom domain and is deployed by the `docs` job in sdk-dotnet's `release.yml` (docfx). GitHub routes a custom domain to the one repository in the organisation that claims it, so the move changes **repository settings only; DNS stays as it is**.
+
+1. **Verify the domain** for the organisation (Org settings → Pages → Verified domains → `xping.io`), if it isn't verified yet. This prevents a takeover during the gap in step 5.
+2. **Prepare the content in sdk-dotnet first.** Merge `feat/docs-overhaul`. Then list the pages to move. Sections on `main` today:
+   - getting-started (5), guides (13), configuration (2), troubleshooting (2), performance (2), cli (1), known-limitations, versioning;
+   - `internals/implementation-specs` (old CLI specs: do not move).
+3. **Create `xping-dev/docs`** (public, MIT) from `docs/specs/followups/docs-repo/`:
+   - move the SDK pages to `sdk/`, in one commit naming `xping-dev/sdk-dotnet@<sha> docs/`;
+   - drop the Cloud, old `report` CLI and `internals/` pages.
+4. **Keep old URLs working.** Code and NuGet readmes of released SDK packages link these pages; each gets a redirect page (docfx `redirect_url` metadata) at its old path, pointing at the new one:
+   - `/index.html`, `/getting-started/quickstart-{nunit,xunit,mstest}.html`, `/getting-started/local-first.html`;
+   - `/configuration/configuration-reference.html`, `/configuration/local-store.html`;
+   - `/troubleshooting/known-limitations.html`;
+   - `/cli/command-reference.html`, `/cli/reading-the-report.html`: these two point at the 2.x CLI overview, noting that the 1.0.0-rc `report` command is gone.
+5. **Switch**, in this order and in one sitting (the gap is minutes):
+   1. In xping-dev/docs: Settings → Pages → Source: GitHub Actions. Run the `Docs` workflow once; the site is at `https://xping-dev.github.io/docs/`. Check it.
+   2. In xping-dev/sdk-dotnet: Settings → Pages → Custom domain → remove `docs.xping.io`.
+   3. In xping-dev/docs: Settings → Pages → Custom domain → `docs.xping.io` → Save. Wait for the DNS check and the certificate, then tick *Enforce HTTPS*.
+6. **Clean up sdk-dotnet:** remove the `docs` job from `release.yml` and the `docs/` site sources, keeping a README link to docs.xping.io (see `followups/sdk-dotnet-readme-note.md`). Unpublish its Pages site.
+7. **Check:**
+   - `curl -sI https://docs.xping.io/` returns 200 from GitHub with a valid certificate;
+   - each redirect path in step 4 lands on its new page;
+   - search works.
+8. **Rollback:** remove the custom domain from xping-dev/docs and re-add it to xping-dev/sdk-dotnet, whose Pages deployment is untouched until step 6.
