@@ -7,10 +7,10 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Services.Serialization;
+using Xping.Session.Models;
+using Xping.Session.Serialization;
 
-namespace Xping.Sdk.Core.Services.LocalStore.Internals;
+namespace Xping.Session.Store.Internals;
 
 /// <summary>
 /// Stores each session as its own gzipped JSON document holding one whole <see cref="TestSession"/>.

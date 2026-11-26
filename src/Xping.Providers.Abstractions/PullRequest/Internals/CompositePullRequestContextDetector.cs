@@ -4,9 +4,9 @@
  */
 
 using Microsoft.Extensions.Logging;
-using Xping.Sdk.Core.Models.PullRequests;
+using Xping.Session.Models.PullRequests;
 
-namespace Xping.Sdk.Core.Services.PullRequest.Internals;
+namespace Xping.Providers.PullRequest.Internals;
 
 /// <summary>
 /// Tries each registered <see cref="IPlatformPullRequestDetector"/> in order and returns

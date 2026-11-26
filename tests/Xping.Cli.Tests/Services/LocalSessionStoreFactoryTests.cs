@@ -5,9 +5,9 @@
 
 using Microsoft.Extensions.Logging.Abstractions;
 using Xping.Cli.Services;
-using Xping.Sdk.Core.Services.Environment;
-using Xping.Sdk.Core.Services.LocalStore;
-using Xping.Sdk.Core.Services.LocalStore.Internals;
+using Xping.Providers.Environment;
+using Xping.Session.Store;
+using Xping.Session.Store.Internals;
 
 namespace Xping.Cli.Tests.Services;
 

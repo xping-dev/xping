@@ -3,9 +3,9 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Services.PullRequest.Internals;
+using Xping.Providers.PullRequest.Internals;
 
-namespace Xping.Sdk.Core.Tests.Services.PullRequest;
+namespace Xping.Providers.Abstractions.Tests.PullRequest;
 
 public sealed class PullRequestEnvironmentTests
 {

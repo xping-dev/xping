@@ -5,7 +5,7 @@
 
 using System.Collections.ObjectModel;
 
-namespace Xping.Sdk.Core.Models.Executions;
+namespace Xping.Session.Models.Executions;
 
 /// <summary>
 /// Immutable metadata associated with a test.

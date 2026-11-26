@@ -3,12 +3,12 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Models.Builders;
-using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Shared;
+using Xping.Session.Models;
+using Xping.Session.Models.Builders;
+using Xping.Session.Models.Executions;
+using Xping.Shared;
 
-namespace Xping.Sdk.Core.Tests.Models;
+namespace Xping.Session.Tests.Models;
 
 public sealed class TestSessionTests
 {

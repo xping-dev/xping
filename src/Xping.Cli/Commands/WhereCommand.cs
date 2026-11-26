@@ -8,9 +8,9 @@ using Xping.Cli.Hosting;
 using Xping.Cli.Report.Rendering;
 using Xping.Cli.Reporting;
 using Xping.Cli.Services;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Services.Environment;
-using Xping.Sdk.Core.Services.LocalStore;
+using Xping.Session.Models;
+using Xping.Providers.Environment;
+using Xping.Session.Store;
 
 namespace Xping.Cli.Commands;
 

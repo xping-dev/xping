@@ -3,9 +3,9 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Services.LocalStore;
+using Xping.Session.Store;
 
-namespace Xping.Sdk.Core.Tests.LocalStore;
+namespace Xping.Session.Tests.Store;
 
 public sealed class LocalStoreOptionsTests
 {

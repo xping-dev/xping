@@ -7,7 +7,7 @@
 using System;
 using System.Globalization;
 
-namespace Xping.Sdk.Shared;
+namespace Xping.Shared;
 
 /// <summary>
 /// Formats millisecond durations at the scale a reader thinks in, so a log line reads
@@ -18,7 +18,7 @@ namespace Xping.Sdk.Shared;
 /// minute, then minutes and hours — keeping at most two units so the value stays scannable.
 /// Raw millisecond counts remain available on the underlying statistics for machine consumers.
 /// </remarks>
-public static class DurationFormatter
+internal static class DurationFormatter
 {
     private const long MillisecondsPerSecond = 1000L;
     private const long MillisecondsPerMinute = 60L * MillisecondsPerSecond;

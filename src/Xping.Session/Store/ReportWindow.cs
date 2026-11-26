@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.Core.Services.LocalStore;
+namespace Xping.Session.Store;
 
 /// <summary>
 /// The default window <c>xping report</c> analyses: the newest runs of one test assembly, kept to a

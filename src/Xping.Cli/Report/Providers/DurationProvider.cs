@@ -7,7 +7,7 @@ using System.Collections.Immutable;
 using System.Globalization;
 using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Model;
-using Xping.Cli.Report.Scoring;
+using Xping.Core.Statistics;
 
 namespace Xping.Cli.Report.Providers;
 

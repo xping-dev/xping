@@ -3,10 +3,9 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Attributes;
-using Xping.Sdk.Core.Models.Executions;
+using Xping.Session.Models.Executions;
 
-namespace Xping.Sdk.Core.Services.Identity;
+namespace Xping.Session.Identity;
 
 /// <summary>
 /// Generates stable, deterministic test identities for tracking tests across runs,
@@ -41,7 +40,7 @@ public interface ITestIdentityGenerator
     /// <param name="sourceFile">Optional source file path.</param>
     /// <param name="sourceLineNumber">Optional source line number.</param>
     /// <param name="testFingerprint">
-    /// Optional pinned fingerprint supplied by <see cref="XpingFingerprintAttribute"/>.
+    /// Optional pinned fingerprint supplied by the <c>[TestFingerprint]</c> attribute (matched by name).
     /// When non-null and non-whitespace this value takes priority over the SHA256 computation.
     /// For non-parameterised tests the value is used as-is.
     /// For parameterised tests the parameter value is appended with a colon separator:

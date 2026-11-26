@@ -8,12 +8,12 @@ using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Models.Builders;
-using Xping.Sdk.Core.Models.Environments;
-using Xping.Sdk.Core.Services.PullRequest.Internals;
-using Xping.Sdk.Core.Services.Serialization;
+using Xping.Session.Models.Builders;
+using Xping.Session.Models.Environments;
+using Xping.Providers.PullRequest.Internals;
+using Xping.Session.Serialization;
 
-namespace Xping.Sdk.Core.Services.Environment.Internals;
+namespace Xping.Providers.Environment.Internals;
 
 /// <summary>
 /// Default implementation of <see cref="IEnvironmentDetector"/> that detects environment information

@@ -3,10 +3,10 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Models.Builders;
-using Xping.Sdk.Core.Models.Environments;
+using Xping.Session.Models.Builders;
+using Xping.Session.Models.Environments;
 
-namespace Xping.Sdk.Core.Tests.Builders;
+namespace Xping.Session.Tests.Builders;
 
 public sealed class EnvironmentInfoBuilderTests
 {

@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.Core.Services.LocalStore;
+namespace Xping.Session.Store;
 
 /// <summary>
 /// Retention settings for the local session store.

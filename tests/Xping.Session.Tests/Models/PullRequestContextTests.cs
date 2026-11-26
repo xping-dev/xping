@@ -3,9 +3,9 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Models.PullRequests;
+using Xping.Session.Models.PullRequests;
 
-namespace Xping.Sdk.Core.Tests.Models;
+namespace Xping.Session.Tests.Models;
 
 public sealed class PullRequestContextTests
 {

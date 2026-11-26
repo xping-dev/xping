@@ -3,9 +3,9 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Services.Diagnostics;
+using Xping.Session.Diagnostics;
 
-namespace Xping.Sdk.Core.Tests.Services.Diagnostics;
+namespace Xping.Session.Tests.Diagnostics;
 
 /// <summary>
 /// Every trace here was captured from a real run of the framework named, not written by hand. A

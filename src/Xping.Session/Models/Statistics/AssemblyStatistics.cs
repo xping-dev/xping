@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.Core.Models.Statistics;
+namespace Xping.Session.Models.Statistics;
 
 /// <summary>
 /// One test assembly's slice of a session's <see cref="QuickStatistics"/>.

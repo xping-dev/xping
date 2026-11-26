@@ -4,7 +4,7 @@
  */
 
 using Xping.Cli.Report.Indexes;
-using Xping.Sdk.Core.Models.Executions;
+using Xping.Session.Models.Executions;
 
 namespace Xping.Cli.Report.Model;
 

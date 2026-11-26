@@ -6,8 +6,8 @@
 using Microsoft.Extensions.Time.Testing;
 using Xping.Cli.Report;
 using Xping.Cli.Report.Windowing;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Models.Executions;
+using Xping.Session.Models;
+using Xping.Session.Models.Executions;
 
 namespace Xping.Cli.Tests.Report;
 

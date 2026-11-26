@@ -5,7 +5,7 @@
 
 using Xping.Cli.Report;
 using Xping.Cli.Report.Contract;
-using Xping.Sdk.Core.Models.Executions;
+using Xping.Session.Models.Executions;
 using static Xping.Cli.Tests.Report.ReportFixtures;
 using static Xping.Cli.Tests.Report.ReportText;
 

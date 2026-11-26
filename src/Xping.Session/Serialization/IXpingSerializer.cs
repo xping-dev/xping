@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.Core.Services.Serialization;
+namespace Xping.Session.Serialization;
 
 /// <summary>
 /// Defines the contract for serialization and deserialization operations in the Xping SDK.

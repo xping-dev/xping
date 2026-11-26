@@ -6,11 +6,11 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using Xping.Sdk.Core.Models.Builders;
-using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Services.Diagnostics;
+using Xping.Session.Models.Builders;
+using Xping.Session.Models.Executions;
+using Xping.Session.Diagnostics;
 
-namespace Xping.Sdk.Core.Services.Identity.Internals;
+namespace Xping.Session.Identity.Internals;
 
 /// <inheritdoc/>
 internal sealed class TestIdentityGenerator : ITestIdentityGenerator

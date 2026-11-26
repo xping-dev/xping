@@ -7,14 +7,14 @@ using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using Xping.Sdk.Core.Models.PullRequests;
-using Xping.Sdk.Core.Services.Environment;
-using Xping.Sdk.Core.Services.PullRequest.Internals;
-using Xping.Sdk.Core.Services.Serialization;
-using Xping.Sdk.Core.Services.Serialization.Internals;
-using Xping.Sdk.Core.Tests.Helpers;
+using Xping.Session.Models.PullRequests;
+using Xping.Providers.Environment;
+using Xping.Providers.PullRequest.Internals;
+using Xping.Session.Serialization;
+using Xping.Session.Serialization.Internals;
+using Xping.Providers.Abstractions.Tests.Helpers;
 
-namespace Xping.Sdk.Core.Tests.Services.PullRequest;
+namespace Xping.Providers.Abstractions.Tests.PullRequest;
 
 public sealed class GitHubPullRequestDetectorTests : IDisposable
 {
@@ -81,7 +81,7 @@ public sealed class GitHubPullRequestDetectorTests : IDisposable
         ILogger<GitHubPullRequestDetector>? logger = null)
         => new(
             env,
-            new XpingJsonSerializer(XpingSerializerOptions.ApiOptions),
+            new XpingJsonSerializer(XpingSerializerOptions.FileOptions),
             logger ?? NullLogger<GitHubPullRequestDetector>.Instance);
 
     // ---------------------------------------------------------------------------

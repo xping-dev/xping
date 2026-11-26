@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Cli.Report.Scoring;
+namespace Xping.Core.Statistics;
 
 /// <summary>
 /// Whether two arms failed at different rates, or divided the same failures the way chance would.

@@ -4,10 +4,10 @@
  */
 
 using Microsoft.Extensions.Logging.Abstractions;
-using Xping.Sdk.Core.Models.PullRequests;
-using Xping.Sdk.Core.Services.PullRequest.Internals;
+using Xping.Session.Models.PullRequests;
+using Xping.Providers.PullRequest.Internals;
 
-namespace Xping.Sdk.Core.Tests.Services.PullRequest;
+namespace Xping.Providers.Abstractions.Tests.PullRequest;
 
 public sealed class CompositePullRequestContextDetectorTests
 {

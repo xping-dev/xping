@@ -7,11 +7,11 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
-using Xping.Sdk.Core.Models.PullRequests;
-using Xping.Sdk.Core.Services.Environment;
-using Xping.Sdk.Core.Services.Serialization;
+using Xping.Session.Models.PullRequests;
+using Xping.Providers.Environment;
+using Xping.Session.Serialization;
 
-namespace Xping.Sdk.Core.Services.PullRequest.Internals;
+namespace Xping.Providers.PullRequest.Internals;
 
 /// <summary>
 /// Detects GitHub pull request context from GitHub Actions environment variables and the

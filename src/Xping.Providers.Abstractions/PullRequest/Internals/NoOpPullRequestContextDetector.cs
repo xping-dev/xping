@@ -3,9 +3,9 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Models.PullRequests;
+using Xping.Session.Models.PullRequests;
 
-namespace Xping.Sdk.Core.Services.PullRequest.Internals;
+namespace Xping.Providers.PullRequest.Internals;
 
 /// <summary>
 /// A no-op implementation of <see cref="IPullRequestContextDetector"/> used when the SDK

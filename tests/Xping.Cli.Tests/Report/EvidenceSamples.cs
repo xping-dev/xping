@@ -5,7 +5,7 @@
 
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
-using Xping.Sdk.Core.Models.Executions;
+using Xping.Session.Models.Executions;
 
 namespace Xping.Cli.Tests.Report;
 

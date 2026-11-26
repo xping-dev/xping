@@ -7,14 +7,13 @@ using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
-using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Models.Builders;
-using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Services.LocalStore;
-using Xping.Sdk.Core.Services.LocalStore.Internals;
+using Xping.Session.Models;
+using Xping.Session.Models.Builders;
+using Xping.Session.Models.Executions;
+using Xping.Session.Store;
+using Xping.Session.Store.Internals;
 
-namespace Xping.Sdk.Core.Tests.LocalStore;
+namespace Xping.Session.Tests.Store;
 
 public sealed class LocalStoreReviewFixesTests : IDisposable
 {
@@ -144,86 +143,5 @@ public sealed class LocalStoreReviewFixesTests : IDisposable
             LocalStorePathResolver.Resolve(start));
     }
 
-    [Fact]
-    public void ASessionRecordsTheModeItWasWrittenUnder()
-    {
-        // The CLI suppresses the signup invitation for existing customers, which it can only do if
-        // the stored session says which mode recorded it.
-        JsonSessionStore store = CreateStore();
-        store.Write(BuildSession(customProperties: new Dictionary<string, string>
-        {
-            [LocalSessionProperties.Mode] = nameof(XpingMode.Cloud)
-        }));
 
-        Assert.True(LocalSessionProperties.IsConnected(store.ReadRecent(1).Sessions[0]));
-    }
-
-    [Fact]
-    public void SessionsWrittenBeforeTheModePropertyExistedReadAsLocal()
-    {
-        // Forward compatibility in reverse: a session with no mode property must still read, and
-        // must read as not connected — the flag only ever suppresses output.
-        JsonSessionStore store = CreateStore();
-        store.Write(BuildSession());
-
-        Assert.False(LocalSessionProperties.IsConnected(store.ReadRecent(1).Sessions[0]));
-    }
-}
-
-public sealed class XpingModeValidationTests
-{
-    [Fact]
-    public void UndefinedModeIsRejectedByValidation()
-    {
-        // Mode is externally bindable (Xping:Mode=99), and an out-of-range value previously passed
-        // validation and then selected a no-op uploader with local-only suppression left off.
-        var config = new XpingConfiguration
-        {
-            ApiKey = "key",
-            ProjectId = "proj",
-            Mode = (XpingMode)99
-        };
-
-        Assert.Contains(config.Validate(), e => e.Contains("undefined", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public void UndefinedModeResolvesThroughAutoRatherThanBeingHonoured()
-    {
-        var config = new XpingConfiguration
-        {
-            ApiKey = "key",
-            ProjectId = "proj",
-            Mode = (XpingMode)99
-        };
-
-        // Credentials are present, so Auto resolution lands on Cloud — a real mode, not the
-        // undefined value.
-        Assert.Equal(XpingMode.Cloud, config.ResolveMode());
-    }
-
-    [Fact]
-    public void UndefinedModeWithoutCredentialsResolvesToLocalOnly()
-    {
-        var config = new XpingConfiguration { Mode = (XpingMode)(-3) };
-
-        Assert.Equal(XpingMode.LocalOnly, config.ResolveMode());
-    }
-
-    [Theory]
-    [InlineData(XpingMode.Auto)]
-    [InlineData(XpingMode.LocalOnly)]
-    [InlineData(XpingMode.Cloud)]
-    [InlineData(XpingMode.Disabled)]
-    public void DefinedModesPassValidation(XpingMode mode)
-    {
-        var config = new XpingConfiguration
-        {
-            ApiKey = "key",
-            ProjectId = "proj",
-            Mode = mode
-        };
-
-        Assert.DoesNotContain(config.Validate(), e => e.Contains("undefined", StringComparison.Ordinal));
-    }
 }

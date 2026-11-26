@@ -6,12 +6,12 @@
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Models.Builders;
-using Xping.Sdk.Core.Services.LocalStore.Internals;
-using Xping.Sdk.Core.Services.Serialization;
+using Xping.Session.Models;
+using Xping.Session.Models.Builders;
+using Xping.Session.Store.Internals;
+using Xping.Session.Serialization;
 
-namespace Xping.Sdk.Core.Tests.LocalStore;
+namespace Xping.Session.Tests.Store;
 
 public sealed class SessionFileHeaderTests : IDisposable
 {

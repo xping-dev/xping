@@ -5,7 +5,7 @@
 
 using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Windowing;
-using Xping.Sdk.Core.Models;
+using Xping.Session.Models;
 
 namespace Xping.Cli.Report;
 

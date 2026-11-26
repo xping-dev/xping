@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Cli.Report.Scoring;
+namespace Xping.Core.Statistics;
 
 /// <summary>
 /// One observation of a binary outcome at an ordered exposure, together with the occasion it came

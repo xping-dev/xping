@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Services.LocalStore;
+using Xping.Session.Store;
 
 namespace Xping.Cli.Report;
 

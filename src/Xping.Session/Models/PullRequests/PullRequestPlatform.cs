@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.Core.Models.PullRequests;
+namespace Xping.Session.Models.PullRequests;
 
 /// <summary>
 /// Identifies the source control platform from which the pull request originates.

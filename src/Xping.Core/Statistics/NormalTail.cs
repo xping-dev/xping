@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Cli.Report.Scoring;
+namespace Xping.Core.Statistics;
 
 /// <summary>
 /// How improbable a standard normal deviate is, out to the far tail.

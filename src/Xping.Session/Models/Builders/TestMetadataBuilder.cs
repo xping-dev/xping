@@ -4,9 +4,9 @@
  */
 
 using System.Collections.ObjectModel;
-using Xping.Sdk.Core.Models.Executions;
+using Xping.Session.Models.Executions;
 
-namespace Xping.Sdk.Core.Models.Builders;
+namespace Xping.Session.Models.Builders;
 
 /// <summary>
 /// Builder for constructing immutable <see cref="TestMetadata"/> instances.

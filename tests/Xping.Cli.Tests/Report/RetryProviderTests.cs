@@ -10,8 +10,8 @@ using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
 using Xping.Cli.Report.Windowing;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Models.Executions;
+using Xping.Session.Models;
+using Xping.Session.Models.Executions;
 
 namespace Xping.Cli.Tests.Report;
 

@@ -7,7 +7,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace Xping.Sdk.Core.Services.Diagnostics;
+namespace Xping.Session.Diagnostics;
 
 /// <summary>
 /// Strips the detail that varies between runs out of a failure message.

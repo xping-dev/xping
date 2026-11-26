@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.Core.Models.Executions;
+namespace Xping.Session.Models.Executions;
 
 /// <summary>
 /// Where in the test lifecycle a failing execution actually failed.

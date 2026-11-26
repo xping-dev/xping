@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Cli.Report.Scoring;
+namespace Xping.Core.Statistics;
 
 /// <summary>
 /// How much a set of measurements varies, relative to its own middle, without one reading owning

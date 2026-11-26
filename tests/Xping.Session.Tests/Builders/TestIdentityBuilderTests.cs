@@ -3,9 +3,9 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Models.Builders;
+using Xping.Session.Models.Builders;
 
-namespace Xping.Sdk.Core.Tests.Builders;
+namespace Xping.Session.Tests.Builders;
 
 public sealed class TestIdentityBuilderTests
 {

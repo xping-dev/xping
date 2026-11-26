@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.Core.Services.PullRequest.Internals;
+namespace Xping.Providers.PullRequest.Internals;
 
 /// <summary>
 /// Reads refs and commit parents straight from a repository's <c>.git</c> directory, for CI platforms

@@ -7,9 +7,9 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Xping.Cli.Report.Store;
 using Xping.Cli.Report.Windowing;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Services.LocalStore;
+using Xping.Session.Models;
+using Xping.Session.Models.Executions;
+using Xping.Session.Store;
 
 namespace Xping.Cli.Report;
 

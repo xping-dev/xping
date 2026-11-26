@@ -7,7 +7,7 @@ using System.Globalization;
 using Microsoft.Extensions.Time.Testing;
 using Xping.Cli.Report;
 using Xping.Cli.Report.Windowing;
-using Xping.Sdk.Core.Models;
+using Xping.Session.Models;
 
 namespace Xping.Cli.Tests.Report;
 

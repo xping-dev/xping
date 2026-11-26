@@ -5,9 +5,9 @@
 
 using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Model;
-using Xping.Cli.Report.Scoring;
+using Xping.Core.Statistics;
 using Xping.Cli.Report.Windowing;
-using Xping.Sdk.Core.Models;
+using Xping.Session.Models;
 
 namespace Xping.Cli.Report.Providers;
 

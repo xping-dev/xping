@@ -5,7 +5,7 @@
 
 using System.Reflection;
 
-namespace Xping.Sdk.Shared;
+namespace Xping.Shared;
 
 /// <summary>
 /// Provides the current version of the Xping SDK, read from assembly metadata at runtime.
@@ -24,7 +24,7 @@ namespace Xping.Sdk.Shared;
 /// string version = XpingVersion.Current; // e.g. "1.2.3" or "1.3.0-beta.1"
 /// </code>
 /// </example>
-public static class XpingVersion
+internal static class XpingVersion
 {
     /// <summary>
     /// The current version of the Xping SDK (e.g. <c>"1.2.3"</c> or <c>"1.3.0-beta.1"</c>).

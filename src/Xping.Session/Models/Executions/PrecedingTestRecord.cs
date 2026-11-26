@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.Core.Models.Executions;
+namespace Xping.Session.Models.Executions;
 
 /// <summary>
 /// A captured snapshot of a completed test, retained per worker to provide the preceding test context

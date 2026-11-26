@@ -4,7 +4,7 @@
  */
 
 using Xping.Cli.Hosting;
-using Xping.Sdk.Core.Services.Environment;
+using Xping.Providers.Environment;
 
 namespace Xping.Cli.Configuration;
 

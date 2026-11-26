@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-using Xping.Cli.Report.Scoring;
+using Xping.Core.Statistics;
 
 namespace Xping.Cli.Tests.Report;
 

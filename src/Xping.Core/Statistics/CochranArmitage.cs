@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Cli.Report.Scoring;
+namespace Xping.Core.Statistics;
 
 /// <summary>
 /// A trend statistic and how improbable it is.

@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.Core.Services.PullRequest.Internals;
+namespace Xping.Providers.PullRequest.Internals;
 
 /// <summary>
 /// Marker interface for platform-specific pull request detectors (GitHub, GitLab, Azure DevOps, etc.).

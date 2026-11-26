@@ -6,9 +6,9 @@
 using Xping.Cli.Commands;
 using Xping.Cli.Tests.Report;
 using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Services.LocalStore;
+using Xping.Session.Models;
+using Xping.Session.Models.Executions;
+using Xping.Session.Store;
 
 namespace Xping.Cli.Tests.Commands;
 

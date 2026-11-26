@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.Core.Models.Executions;
+namespace Xping.Session.Models.Executions;
 
 /// <summary>
 /// Represents the outcome of a test execution.

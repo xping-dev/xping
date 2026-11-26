@@ -5,24 +5,21 @@
 
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
-using Xping.Sdk.Core.Extensions;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Services.Serialization;
+using Xping.Session.Models;
+using Xping.Session.Models.Executions;
+using Xping.Session.Serialization;
+using Xping.Session.Serialization.Internals;
 
-namespace Xping.Sdk.Core.Tests.Serialization;
+namespace Xping.Session.Tests.Serialization;
 
 public sealed class XpingJsonDeserializerTests
 {
     private const string ResourceName =
-        "Xping.Sdk.Core.Tests.Serialization.TestData.afbba725-d460-4b9f-88c6-a39c040e85aa.json";
+        "Xping.Session.Tests.Serialization.TestData.afbba725-d460-4b9f-88c6-a39c040e85aa.json";
 
     private static IXpingSerializer BuildSerializer()
-    {
-        var services = new ServiceCollection();
-        services.AddXpingSerialization();
-        return services.BuildServiceProvider().GetRequiredService<IXpingSerializer>();
-    }
+    =>
+        new XpingJsonSerializer(XpingSerializerOptions.FileOptions);
 
     private static Stream OpenResourceStream()
     {

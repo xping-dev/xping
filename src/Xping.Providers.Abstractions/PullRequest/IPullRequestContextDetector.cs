@@ -3,9 +3,9 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Models.PullRequests;
+using Xping.Session.Models.PullRequests;
 
-namespace Xping.Sdk.Core.Services.PullRequest;
+namespace Xping.Providers.PullRequest;
 
 /// <summary>
 /// Detects pull request or merge request context from the current CI/CD environment.

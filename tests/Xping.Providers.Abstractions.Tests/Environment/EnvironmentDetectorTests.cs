@@ -8,14 +8,14 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Models.Environments;
-using Xping.Sdk.Core.Services.Environment;
-using Xping.Sdk.Core.Services.Environment.Internals;
-using Xping.Sdk.Core.Services.Serialization;
-using Xping.Sdk.Core.Services.Serialization.Internals;
-using Xping.Sdk.Core.Tests.Helpers;
+using Xping.Session.Models.Environments;
+using Xping.Providers.Environment;
+using Xping.Providers.Environment.Internals;
+using Xping.Session.Serialization;
+using Xping.Session.Serialization.Internals;
+using Xping.Providers.Abstractions.Tests.Helpers;
 
-namespace Xping.Sdk.Core.Tests.Services.Environment;
+namespace Xping.Providers.Abstractions.Tests.Environment;
 
 [Collection("Sequential")]
 public sealed class EnvironmentDetectorTests
@@ -1340,7 +1340,7 @@ public sealed class EnvironmentDetectorTests
     {
         return new EnvironmentDetector(
             Options.Create(configuration ?? new XpingConfiguration()),
-            new XpingJsonSerializer(XpingSerializerOptions.ApiOptions),
+            new XpingJsonSerializer(XpingSerializerOptions.FileOptions),
             env ?? _env,
             logger ?? NullLogger<EnvironmentDetector>.Instance);
     }

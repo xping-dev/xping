@@ -5,7 +5,7 @@
 
 using System;
 
-namespace Xping.Sdk.Core.Services.Diagnostics;
+namespace Xping.Session.Diagnostics;
 
 /// <summary>
 /// The namespace roots a stack frame is not worth signing a failure with.

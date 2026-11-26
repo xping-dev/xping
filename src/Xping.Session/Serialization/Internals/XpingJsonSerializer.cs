@@ -5,7 +5,7 @@
 
 using System.Text.Json;
 
-namespace Xping.Sdk.Core.Services.Serialization.Internals;
+namespace Xping.Session.Serialization.Internals;
 
 /// <summary>
 /// Provides JSON serialization and deserialization services for the Xping SDK using System.Text.Json.

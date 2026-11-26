@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.Core.Services.Environment.Internals;
+namespace Xping.Providers.Environment.Internals;
 
 /// <summary>
 /// Default implementation of <see cref="IEnvironmentVariableProvider"/> that reads from

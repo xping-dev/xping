@@ -5,65 +5,43 @@
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Xping.Sdk.Core.Models.Builders;
-using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Services.Serialization;
+using Xping.Session.Models.Builders;
+using Xping.Session.Models.Executions;
+using Xping.Session.Serialization;
 
-namespace Xping.Sdk.Core.Tests.Serialization;
+namespace Xping.Session.Tests.Serialization;
 
 public sealed class XpingSerializerOptionsTests
 {
-    // ---------------------------------------------------------------------------
-    // ApiOptions
-    // ---------------------------------------------------------------------------
-
     [Fact]
-    public void ApiOptions_ShouldUseCamelCaseNaming()
+    public void FileOptions_ShouldBeCaseInsensitive()
     {
-        Assert.Equal(JsonNamingPolicy.CamelCase, XpingSerializerOptions.ApiOptions.PropertyNamingPolicy);
+        Assert.True(XpingSerializerOptions.FileOptions.PropertyNameCaseInsensitive);
     }
 
     [Fact]
-    public void ApiOptions_ShouldNotWriteIndented()
-    {
-        Assert.False(XpingSerializerOptions.ApiOptions.WriteIndented);
-    }
-
-    [Fact]
-    public void ApiOptions_ShouldIgnoreNullPropertiesWhenWriting()
-    {
-        Assert.Equal(JsonIgnoreCondition.WhenWritingNull, XpingSerializerOptions.ApiOptions.DefaultIgnoreCondition);
-    }
-
-    [Fact]
-    public void ApiOptions_ShouldBeCaseInsensitive()
-    {
-        Assert.True(XpingSerializerOptions.ApiOptions.PropertyNameCaseInsensitive);
-    }
-
-    [Fact]
-    public void ApiOptions_ShouldSerializeEnumsAsStrings()
+    public void FileOptions_ShouldSerializeEnumsAsStrings()
     {
         // TestOutcome is an enum — with JsonStringEnumConverter it should serialize as a string
         var obj = new { Outcome = TestOutcome.Passed };
-        var json = JsonSerializer.Serialize(obj, XpingSerializerOptions.ApiOptions);
+        var json = JsonSerializer.Serialize(obj, XpingSerializerOptions.FileOptions);
         Assert.Contains("\"passed\"", json, StringComparison.Ordinal); // camelCase enum + string form
     }
 
     /// <summary>
     /// The wire form of an outcome is its camelCase name, so the name — not the numeric value — is
-    /// what the Xping Cloud API and any stored session are pinned to.
+    /// what every stored session is pinned to.
     /// </summary>
     [Fact]
-    public void ApiOptions_TimeoutOutcome_RoundTripsAsTheStringTimeout()
+    public void FileOptions_TimeoutOutcome_RoundTripsAsTheStringTimeout()
     {
         var json = JsonSerializer.Serialize(
-            new { Outcome = TestOutcome.Timeout }, XpingSerializerOptions.ApiOptions);
+            new { Outcome = TestOutcome.Timeout }, XpingSerializerOptions.FileOptions);
 
         Assert.Contains("\"timeout\"", json, StringComparison.Ordinal);
 
         var roundTripped = JsonSerializer.Deserialize<TestOutcome>(
-            "\"timeout\"", XpingSerializerOptions.ApiOptions);
+            "\"timeout\"", XpingSerializerOptions.FileOptions);
 
         Assert.Equal(TestOutcome.Timeout, roundTripped);
     }
@@ -84,14 +62,6 @@ public sealed class XpingSerializerOptionsTests
         Assert.Equal(TestOutcome.Timeout, roundTripped!.Outcome);
         Assert.Equal(TimeSpan.FromMilliseconds(5000), roundTripped.TimeoutBudget);
         Assert.Equal(TimeoutBudgetSource.Declared, roundTripped.TimeoutBudgetSource);
-    }
-
-    [Fact]
-    public void ApiOptions_ShouldBeSameInstance_OnMultipleAccesses()
-    {
-        var opts1 = XpingSerializerOptions.ApiOptions;
-        var opts2 = XpingSerializerOptions.ApiOptions;
-        Assert.Same(opts1, opts2);
     }
 
     // ---------------------------------------------------------------------------
@@ -149,10 +119,10 @@ public sealed class XpingSerializerOptionsTests
     // ---------------------------------------------------------------------------
 
     [Fact]
-    public void ApiOptions_ShouldOmitNullProperties_InSerializedOutput()
+    public void FileOptions_ShouldOmitNullProperties_InSerializedOutput()
     {
         var obj = new { Name = "test", Optional = (string?)null };
-        var json = JsonSerializer.Serialize(obj, XpingSerializerOptions.ApiOptions);
+        var json = JsonSerializer.Serialize(obj, XpingSerializerOptions.FileOptions);
         Assert.DoesNotContain("optional", json, StringComparison.Ordinal);
         Assert.Contains("\"name\"", json, StringComparison.Ordinal);
     }

@@ -6,10 +6,10 @@
 using System.Globalization;
 using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Model;
-using Xping.Cli.Report.Scoring;
-using Xping.Cli.Report.Signatures;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Models.Executions;
+using Xping.Core.Statistics;
+using Xping.Core.Signatures;
+using Xping.Session.Models;
+using Xping.Session.Models.Executions;
 
 namespace Xping.Cli.Report.Providers;
 

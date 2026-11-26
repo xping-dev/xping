@@ -5,7 +5,7 @@
 
 using Microsoft.Extensions.Logging;
 
-namespace Xping.Sdk.Core.Tests.Helpers;
+namespace Xping.Providers.Abstractions.Tests.Helpers;
 
 /// <summary>
 /// Records the level and message of every log call, or throws on each one to test that logging failures are

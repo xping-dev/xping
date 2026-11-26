@@ -6,7 +6,7 @@
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
-namespace Xping.Sdk.Core.Services.Diagnostics;
+namespace Xping.Session.Diagnostics;
 
 /// <summary>
 /// The frames a signature was built from, and whether they are as good as intended.

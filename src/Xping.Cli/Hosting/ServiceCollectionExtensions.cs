@@ -24,9 +24,9 @@ using Xping.Cli.Report.Providers;
 using Xping.Cli.Report.Windowing;
 using Xping.Cli.Services;
 using Xping.Sdk.Core.Extensions;
-using Xping.Sdk.Core.Services.Environment;
-using Xping.Sdk.Core.Services.Serialization;
-using Xping.Sdk.Shared;
+using Xping.Providers.Environment;
+using Xping.Session.Serialization;
+using Xping.Shared;
 
 namespace Xping.Cli.Hosting;
 

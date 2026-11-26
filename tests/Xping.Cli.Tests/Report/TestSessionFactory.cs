@@ -8,12 +8,12 @@ using System.Text;
 using Xping.Cli.Report;
 using Xping.Cli.Report.Store;
 using Xping.Cli.Report.Windowing;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Models.Builders;
-using Xping.Sdk.Core.Models.Environments;
-using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Models.Statistics;
-using Xping.Sdk.Core.Services.LocalStore;
+using Xping.Session.Models;
+using Xping.Session.Models.Builders;
+using Xping.Session.Models.Environments;
+using Xping.Session.Models.Executions;
+using Xping.Session.Models.Statistics;
+using Xping.Session.Store;
 
 namespace Xping.Cli.Tests.Report;
 

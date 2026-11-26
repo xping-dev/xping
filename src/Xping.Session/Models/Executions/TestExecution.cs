@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.Core.Models.Executions;
+namespace Xping.Session.Models.Executions;
 
 /// <summary>
 /// Immutable test execution record with all associated metadata and results.
@@ -192,7 +192,7 @@ public sealed class TestExecution
 
     /// <summary>
     /// Gets a value indicating whether a failure's stack trace was left out of the upload, because
-    /// <see cref="Xping.Sdk.Core.Configuration.XpingConfiguration.UploadStackTraces"/> is off.
+    /// the SDK setting <c>UploadStackTraces</c> is off.
     /// When <see langword="true"/>, <see cref="StackTrace"/> is <see langword="null"/> although a
     /// trace existed; <see cref="StackTraceHash"/> is still set. Never set in the local store.
     /// </summary>

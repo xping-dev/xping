@@ -3,9 +3,9 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Shared;
+using Xping.Shared;
 
-namespace Xping.Sdk.Core.Tests.Shared;
+namespace Xping.Session.Tests.Shared;
 
 public sealed class DurationFormatterTests
 {

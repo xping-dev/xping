@@ -6,9 +6,9 @@
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
-using Xping.Sdk.Core.Models;
+using Xping.Session.Models;
 
-namespace Xping.Sdk.Core.Services.LocalStore.Internals;
+namespace Xping.Session.Store.Internals;
 
 /// <summary>
 /// Reads the assemblies a stored session covers from the head of its file.

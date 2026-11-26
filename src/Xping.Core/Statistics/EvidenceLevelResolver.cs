@@ -6,7 +6,7 @@
 using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Model;
 
-namespace Xping.Cli.Report.Scoring;
+namespace Xping.Core.Statistics;
 
 /// <summary>
 /// Decides how much data a finding rests on, and whether it rests on enough to report at all.

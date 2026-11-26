@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Cli.Report.Signatures;
+namespace Xping.Core.Signatures;
 
 /// <summary>
 /// What one failure looked like, reduced to something two failures can be compared by.

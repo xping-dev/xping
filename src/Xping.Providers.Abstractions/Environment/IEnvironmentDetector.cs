@@ -3,9 +3,9 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Models.Environments;
+using Xping.Session.Models.Environments;
 
-namespace Xping.Sdk.Core.Services.Environment;
+namespace Xping.Providers.Environment;
 
 /// <summary>
 /// Provides functionality to detect and collect environment information.

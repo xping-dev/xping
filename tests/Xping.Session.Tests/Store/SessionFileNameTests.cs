@@ -3,9 +3,9 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Services.LocalStore.Internals;
+using Xping.Session.Store.Internals;
 
-namespace Xping.Sdk.Core.Tests.LocalStore;
+namespace Xping.Session.Tests.Store;
 
 public sealed class SessionFileNameTests
 {

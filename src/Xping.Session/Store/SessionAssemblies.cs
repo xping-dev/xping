@@ -5,11 +5,11 @@
 
 using System.Collections.ObjectModel;
 
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Models.Statistics;
+using Xping.Session.Models;
+using Xping.Session.Models.Executions;
+using Xping.Session.Models.Statistics;
 
-namespace Xping.Sdk.Core.Services.LocalStore;
+namespace Xping.Session.Store;
 
 /// <summary>
 /// Resolves which test assemblies a stored session covers, and narrows a session to one of them.

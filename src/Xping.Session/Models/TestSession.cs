@@ -4,13 +4,13 @@
  */
 
 using System.Text.Json.Serialization;
-using Xping.Sdk.Core.Models.Environments;
-using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Models.PullRequests;
-using Xping.Sdk.Core.Models.Statistics;
-using Xping.Sdk.Shared;
+using Xping.Session.Models.Environments;
+using Xping.Session.Models.Executions;
+using Xping.Session.Models.PullRequests;
+using Xping.Session.Models.Statistics;
+using Xping.Shared;
 
-namespace Xping.Sdk.Core.Models;
+namespace Xping.Session.Models;
 
 /// <summary>
 /// Immutable test session containing environment information and test executions.

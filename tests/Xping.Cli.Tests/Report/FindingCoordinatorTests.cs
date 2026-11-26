@@ -8,8 +8,8 @@ using System.Collections.ObjectModel;
 using Xping.Cli.Report;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Models.Executions;
+using Xping.Session.Models;
+using Xping.Session.Models.Executions;
 
 namespace Xping.Cli.Tests.Report;
 

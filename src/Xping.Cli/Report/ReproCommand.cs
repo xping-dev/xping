@@ -6,7 +6,7 @@
 using System.Text;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
-using Xping.Sdk.Core.Services.LocalStore;
+using Xping.Session.Store;
 
 namespace Xping.Cli.Report;
 

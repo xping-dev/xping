@@ -5,7 +5,7 @@
 
 using Microsoft.Extensions.Time.Testing;
 using Xping.Cli.Commands;
-using Xping.Sdk.Core.Services.Environment;
+using Xping.Providers.Environment;
 
 namespace Xping.Cli.Tests.Commands;
 

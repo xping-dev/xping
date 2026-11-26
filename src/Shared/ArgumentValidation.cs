@@ -6,12 +6,12 @@
 
 using System.Runtime.CompilerServices;
 
-namespace Xping.Sdk.Shared;
+namespace Xping.Shared;
 
 /// <summary>
 /// This class provides extension methods to help verify parameters' validity.
 /// </summary>
-public static class ArgumentValidation
+internal static class ArgumentValidation
 {
     /// <summary>
     /// Basic Validation helper to verify parameter validity.

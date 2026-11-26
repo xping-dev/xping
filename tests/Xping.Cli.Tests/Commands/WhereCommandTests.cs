@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Xping.Cli.Commands;
 using Xping.Cli.Hosting;
 using Xping.Cli.Services;
-using Xping.Sdk.Core.Services.Environment;
+using Xping.Providers.Environment;
 
 namespace Xping.Cli.Tests.Commands;
 

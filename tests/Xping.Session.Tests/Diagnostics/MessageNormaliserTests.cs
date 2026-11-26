@@ -3,9 +3,9 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Services.Diagnostics;
+using Xping.Session.Diagnostics;
 
-namespace Xping.Sdk.Core.Tests.Diagnostics;
+namespace Xping.Session.Tests.Diagnostics;
 
 public sealed class MessageNormaliserTests
 {

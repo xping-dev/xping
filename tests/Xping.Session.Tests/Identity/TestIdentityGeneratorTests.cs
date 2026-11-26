@@ -4,15 +4,12 @@
  */
 
 using System.Globalization;
-using Microsoft.Extensions.DependencyInjection;
-using Xping.Sdk.Core.Attributes;
-using Xping.Sdk.Core.Extensions;
-using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Services.Identity;
-using Xping.Sdk.Core.Tests.Diagnostics;
-using Xping.Sdk.Core.Tests.Helpers;
+using Xping.Session.Models.Executions;
+using Xping.Session.Identity;
+using Xping.Session.Identity.Internals;
+using Xping.Session.Tests.Diagnostics;
 
-namespace Xping.Sdk.Core.Tests.Identity;
+namespace Xping.Session.Tests.Identity;
 
 public sealed class TestIdentityGeneratorTests
 {
@@ -21,8 +18,7 @@ public sealed class TestIdentityGeneratorTests
 
     private static ITestIdentityGenerator BuildGenerator()
     {
-        var provider = ServiceHelper.CreateCollectorServices().BuildServiceProvider();
-        return provider.GetRequiredService<ITestIdentityGenerator>();
+        return new TestIdentityGenerator();
     }
 
     private const string ValidFqn = "MyNamespace.MyClass.MyTest";
@@ -383,66 +379,6 @@ public sealed class TestIdentityGeneratorTests
 
         // Assert — no parameters means the pinned value is used as-is, no suffix appended
         Assert.Equal(pin, identity.TestFingerprint);
-    }
-
-    // ---------------------------------------------------------------------------
-    // XpingFingerprintAttribute slug validation
-    // ---------------------------------------------------------------------------
-
-    [Theory]
-    [InlineData("login-happy-path-v1")]
-    [InlineData("checkout_smoke_42")]
-    [InlineData("abc123")]
-    [InlineData("A-B_C")]
-    public void XpingFingerprintAttribute_WithValidSlug_DoesNotThrow(string fingerprint)
-    {
-        // Act & Assert — no exception
-        var attr = new XpingFingerprintAttribute(fingerprint);
-        Assert.Equal(fingerprint, attr.Fingerprint);
-    }
-
-    [Theory]
-    [InlineData("login:v1")]          // colon — the reserved separator
-    [InlineData("test.method")]       // period
-    [InlineData("has space")]         // space
-    [InlineData("uuid@host")]         // at-sign
-    [InlineData("path/segment")]      // slash
-    public void XpingFingerprintAttribute_WithInvalidSlugCharacters_ThrowsArgumentException(string fingerprint)
-    {
-        // Act & Assert
-        Assert.Throws<ArgumentException>(() => new XpingFingerprintAttribute(fingerprint));
-    }
-
-    [Fact]
-    public void XpingFingerprintAttribute_ExactlyAtLengthLimit_DoesNotThrow()
-    {
-        // Arrange — 100 'a' characters (exactly at the limit)
-        var fingerprint = new string('a', 100);
-
-        // Act & Assert — no exception
-        var attr = new XpingFingerprintAttribute(fingerprint);
-        Assert.Equal(fingerprint, attr.Fingerprint);
-    }
-
-    [Fact]
-    public void XpingFingerprintAttribute_OneCharacterOverLimit_ThrowsArgumentException()
-    {
-        // Arrange — 101 'a' characters (one over the limit)
-        var fingerprint = new string('a', 101);
-
-        // Act & Assert
-        Assert.Throws<ArgumentException>(() => new XpingFingerprintAttribute(fingerprint));
-    }
-
-    [Fact]
-    public void XpingFingerprintAttribute_ShortValue_DoesNotThrow()
-    {
-        // Arrange
-        const string fingerprint = "short";
-
-        // Act & Assert — no exception
-        var attr = new XpingFingerprintAttribute(fingerprint);
-        Assert.Equal(fingerprint, attr.Fingerprint);
     }
 
     // ---------------------------------------------------------------------------

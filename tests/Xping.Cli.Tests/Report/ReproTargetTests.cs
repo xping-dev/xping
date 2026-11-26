@@ -4,7 +4,7 @@
  */
 
 using Xping.Cli.Report.Model;
-using Xping.Sdk.Core.Services.LocalStore;
+using Xping.Session.Store;
 
 namespace Xping.Cli.Tests.Report;
 

@@ -3,8 +3,8 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Models.Statistics;
+using Xping.Session.Models;
+using Xping.Session.Models.Statistics;
 
 namespace Xping.Cli.Report.Indexes;
 

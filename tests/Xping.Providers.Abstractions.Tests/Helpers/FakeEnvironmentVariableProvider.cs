@@ -3,9 +3,9 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Services.Environment;
+using Xping.Providers.Environment;
 
-namespace Xping.Sdk.Core.Tests.Helpers;
+namespace Xping.Providers.Abstractions.Tests.Helpers;
 
 /// <summary>
 /// An environment that holds only the variables a test sets, so tests never touch the process

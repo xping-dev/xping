@@ -13,7 +13,7 @@ using System.Reflection.PortableExecutable;
 using System.Runtime.CompilerServices;
 using System.Threading;
 
-namespace Xping.Sdk.Core.Services.Diagnostics;
+namespace Xping.Session.Diagnostics;
 
 /// <summary>
 /// Finds the file and line a test method is declared at, by reading the assembly's Portable PDB.

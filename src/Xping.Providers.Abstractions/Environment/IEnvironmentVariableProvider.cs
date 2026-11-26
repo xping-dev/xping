@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.Core.Services.Environment;
+namespace Xping.Providers.Environment;
 
 /// <summary>
 /// Abstracts access to process environment variables, enabling testability of components

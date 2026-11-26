@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.Core.Models.Statistics;
+namespace Xping.Session.Models.Statistics;
 
 /// <summary>
 /// Immutable summary statistics calculated locally from running totals before cloud analysis.

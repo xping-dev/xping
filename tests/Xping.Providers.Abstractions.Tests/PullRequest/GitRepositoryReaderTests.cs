@@ -6,9 +6,9 @@
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Text;
-using Xping.Sdk.Core.Services.PullRequest.Internals;
+using Xping.Providers.PullRequest.Internals;
 
-namespace Xping.Sdk.Core.Tests.Services.PullRequest;
+namespace Xping.Providers.Abstractions.Tests.PullRequest;
 
 /// <summary>
 /// Runs against throwaway repositories built with the real <c>git</c> CLI, so the reader is checked

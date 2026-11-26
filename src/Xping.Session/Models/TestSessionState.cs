@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.Core.Models;
+namespace Xping.Session.Models;
 
 /// <summary>
 /// Indicates the upload state of a session, enabling the cloud to distinguish

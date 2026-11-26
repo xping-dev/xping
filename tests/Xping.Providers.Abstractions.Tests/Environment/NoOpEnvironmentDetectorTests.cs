@@ -3,9 +3,9 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Services.Environment.Internals;
+using Xping.Providers.Environment.Internals;
 
-namespace Xping.Sdk.Core.Tests.Services.Environment;
+namespace Xping.Providers.Abstractions.Tests.Environment;
 
 public sealed class NoOpEnvironmentDetectorTests
 {

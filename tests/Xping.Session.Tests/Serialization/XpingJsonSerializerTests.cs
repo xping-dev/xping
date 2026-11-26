@@ -6,25 +6,22 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
-using Xping.Sdk.Core.Extensions;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Models.Builders;
-using Xping.Sdk.Core.Models.Environments;
-using Xping.Sdk.Core.Models.Statistics;
-using Xping.Sdk.Core.Services.Serialization;
+using Xping.Session.Models;
+using Xping.Session.Models.Builders;
+using Xping.Session.Models.Environments;
+using Xping.Session.Models.Statistics;
+using Xping.Session.Serialization;
+using Xping.Session.Serialization.Internals;
 
-namespace Xping.Sdk.Core.Tests.Serialization;
+namespace Xping.Session.Tests.Serialization;
 
 public sealed class XpingJsonSerializerTests
 {
     private sealed record SampleRecord(string Name, int Value);
 
     private static IXpingSerializer BuildSerializer()
-    {
-        var services = new ServiceCollection();
-        services.AddXpingSerialization();
-        return services.BuildServiceProvider().GetRequiredService<IXpingSerializer>();
-    }
+    =>
+        new XpingJsonSerializer(XpingSerializerOptions.FileOptions);
 
     // ---------------------------------------------------------------------------
     // Serialize (string)
@@ -50,7 +47,7 @@ public sealed class XpingJsonSerializerTests
 
         var json = serializer.Serialize(obj);
 
-        // ApiOptions uses camelCase naming policy
+        // FileOptions uses camelCase naming policy
         Assert.Contains("\"name\"", json, StringComparison.Ordinal);
         Assert.Contains("\"value\"", json, StringComparison.Ordinal);
         Assert.DoesNotContain("\"Name\"", json, StringComparison.Ordinal);

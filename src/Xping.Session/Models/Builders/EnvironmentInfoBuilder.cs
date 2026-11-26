@@ -4,10 +4,10 @@
  */
 
 using System.Collections.ObjectModel;
-using Xping.Sdk.Core.Models.Environments;
-using Xping.Sdk.Shared;
+using Xping.Session.Models.Environments;
+using Xping.Shared;
 
-namespace Xping.Sdk.Core.Models.Builders;
+namespace Xping.Session.Models.Builders;
 
 /// <summary>
 /// Builder for constructing immutable <see cref="EnvironmentInfo"/> instances.

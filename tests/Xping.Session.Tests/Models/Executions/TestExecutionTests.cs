@@ -4,11 +4,11 @@
  */
 
 using System.Reflection;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Models.Builders;
-using Xping.Sdk.Core.Models.Executions;
+using Xping.Session.Models;
+using Xping.Session.Models.Builders;
+using Xping.Session.Models.Executions;
 
-namespace Xping.Sdk.Core.Tests.Models.Executions;
+namespace Xping.Session.Tests.Models.Executions;
 
 public sealed class TestExecutionTests
 {

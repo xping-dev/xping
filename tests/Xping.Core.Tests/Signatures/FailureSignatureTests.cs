@@ -4,9 +4,9 @@
  */
 
 using Xping.Cli.Report;
-using Xping.Cli.Report.Signatures;
-using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Tests.Diagnostics;
+using Xping.Core.Signatures;
+using Xping.Session.Models.Executions;
+using Xping.Session.Tests.Diagnostics;
 
 namespace Xping.Cli.Tests.Report;
 

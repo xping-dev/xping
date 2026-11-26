@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Models;
+using Xping.Session.Models;
 
 namespace Xping.Cli.Report;
 

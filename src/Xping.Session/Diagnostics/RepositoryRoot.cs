@@ -7,7 +7,7 @@ using System;
 using System.IO;
 using System.Linq;
 
-namespace Xping.Sdk.Core.Services.Diagnostics;
+namespace Xping.Session.Diagnostics;
 
 /// <summary>
 /// Finds the root of the repository a path belongs to.

@@ -6,7 +6,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Xping.Sdk.Core.Services.Diagnostics;
+namespace Xping.Session.Diagnostics;
 
 /// <summary>
 /// Reads method identifiers out of a stack trace so a failure can be attributed to the member it

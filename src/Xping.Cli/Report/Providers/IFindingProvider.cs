@@ -5,7 +5,7 @@
 
 using System.Collections.ObjectModel;
 using Xping.Cli.Report.Model;
-using Xping.Sdk.Core.Models;
+using Xping.Session.Models;
 
 namespace Xping.Cli.Report.Providers;
 

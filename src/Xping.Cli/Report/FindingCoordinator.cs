@@ -7,7 +7,7 @@ using System.Collections.ObjectModel;
 
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
-using Xping.Cli.Report.Scoring;
+using Xping.Core.Statistics;
 
 namespace Xping.Cli.Report;
 

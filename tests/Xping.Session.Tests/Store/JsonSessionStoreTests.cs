@@ -7,14 +7,14 @@ using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Extensions.Logging.Abstractions;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Models.Builders;
-using Xping.Sdk.Core.Models.Environments;
-using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Services.LocalStore;
-using Xping.Sdk.Core.Services.LocalStore.Internals;
+using Xping.Session.Models;
+using Xping.Session.Models.Builders;
+using Xping.Session.Models.Environments;
+using Xping.Session.Models.Executions;
+using Xping.Session.Store;
+using Xping.Session.Store.Internals;
 
-namespace Xping.Sdk.Core.Tests.LocalStore;
+namespace Xping.Session.Tests.Store;
 
 // One test sets XPING_LOCAL_STORE, which is process-wide state.
 [Collection("Sequential")]

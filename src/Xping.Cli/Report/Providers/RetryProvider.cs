@@ -6,8 +6,8 @@
 using System.Globalization;
 using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Model;
-using Xping.Cli.Report.Scoring;
-using Xping.Sdk.Core.Models.Executions;
+using Xping.Core.Statistics;
+using Xping.Session.Models.Executions;
 
 namespace Xping.Cli.Report.Providers;
 

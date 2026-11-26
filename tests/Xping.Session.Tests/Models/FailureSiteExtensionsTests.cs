@@ -3,9 +3,9 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Models.Executions;
+using Xping.Session.Models.Executions;
 
-namespace Xping.Sdk.Core.Tests.Models;
+namespace Xping.Session.Tests.Models;
 
 public class FailureSiteExtensionsTests
 {

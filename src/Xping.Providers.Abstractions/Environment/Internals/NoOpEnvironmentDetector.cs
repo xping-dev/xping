@@ -4,9 +4,9 @@
  */
 
 using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Models.Environments;
+using Xping.Session.Models.Environments;
 
-namespace Xping.Sdk.Core.Services.Environment.Internals;
+namespace Xping.Providers.Environment.Internals;
 
 /// <summary>
 /// A no-op implementation of <see cref="IEnvironmentDetector"/> used when the SDK

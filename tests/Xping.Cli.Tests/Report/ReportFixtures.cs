@@ -9,10 +9,10 @@ using Xping.Cli.Report.Contract;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
 using Xping.Cli.Report.Rendering;
-using Xping.Cli.Report.Scoring;
+using Xping.Core.Statistics;
 using Xping.Cli.Report.Windowing;
-using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Services.LocalStore;
+using Xping.Session.Models.Executions;
+using Xping.Session.Store;
 
 namespace Xping.Cli.Tests.Report;
 

@@ -4,9 +4,9 @@
  */
 
 using System.Runtime.InteropServices;
-using Xping.Sdk.Core.Services.LocalStore.Internals;
+using Xping.Session.Store.Internals;
 
-namespace Xping.Sdk.Core.Tests.LocalStore;
+namespace Xping.Session.Tests.Store;
 
 // Sets XPING_LOCAL_STORE, which is process-wide state, to prove the resolver ignores it.
 [Collection("Sequential")]

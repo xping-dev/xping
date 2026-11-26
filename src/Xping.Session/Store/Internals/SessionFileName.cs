@@ -6,7 +6,7 @@
 using System.Globalization;
 using System.Text;
 
-namespace Xping.Sdk.Core.Services.LocalStore.Internals;
+namespace Xping.Session.Store.Internals;
 
 /// <summary>
 /// Builds and parses session file names: <c>session-{ticks}-{id}[-{tags}].json.gz</c>.

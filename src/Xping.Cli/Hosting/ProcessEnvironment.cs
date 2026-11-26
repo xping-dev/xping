@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Services.Environment;
+using Xping.Providers.Environment;
 
 namespace Xping.Cli.Hosting;
 

@@ -6,9 +6,9 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Microsoft.Extensions.Logging;
-using Xping.Sdk.Core.Services.Environment;
+using Xping.Providers.Environment;
 
-namespace Xping.Sdk.Core.Services.PullRequest.Internals;
+namespace Xping.Providers.PullRequest.Internals;
 
 /// <summary>
 /// Environment reading and parsing shared by the platform pull request detectors.

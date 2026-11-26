@@ -9,6 +9,12 @@
     <PackageVersion Include="System.CommandLine" Version="2.0.15" />
   </ItemGroup>
 
+  <ItemGroup Label="Session (netstandard2.0)">
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.2" />
+    <PackageVersion Include="System.Text.Json" Version="10.0.2" />
+    <PackageVersion Include="System.Reflection.Metadata" Version="10.0.2" />
+  </ItemGroup>
+
   <ItemGroup Label="Tests">
     <PackageVersion Include="xunit.v3" Version="4.0.3" />
   </ItemGroup>

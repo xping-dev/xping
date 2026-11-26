@@ -6,9 +6,9 @@
 using System.Collections;
 using System.Reflection;
 using System.Reflection.Emit;
-using Xping.Sdk.Core.Services.Diagnostics;
+using Xping.Session.Diagnostics;
 
-namespace Xping.Sdk.Core.Tests.Diagnostics;
+namespace Xping.Session.Tests.Diagnostics;
 
 /// <summary>
 /// Covers reading a method's declaration site out of the Portable PDB.
@@ -233,7 +233,7 @@ public sealed class SourceLocationLookupTests
         Assert.NotNull(file);
         Assert.DoesNotContain('\\', file);
         Assert.False(Path.IsPathRooted(file), $"Expected a repository-relative path, got '{file}'.");
-        Assert.StartsWith("tests/Xping.Sdk.Core.Tests/", file, StringComparison.Ordinal);
+        Assert.StartsWith("tests/Xping.Session.Tests/", file, StringComparison.Ordinal);
     }
 
     // ---------------------------------------------------------------------------

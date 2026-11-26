@@ -7,7 +7,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace Xping.Sdk.Core.Services.Serialization;
+namespace Xping.Session.Serialization;
 
 /// <summary>
 /// Provides centralized JSON serialization configuration for the Xping SDK.
@@ -16,20 +16,6 @@ namespace Xping.Sdk.Core.Services.Serialization;
 /// </summary>
 public static class XpingSerializerOptions
 {
-    /// <summary>
-    /// Gets the default JSON serialization options for API communication.
-    /// Uses camel case naming, compact formatting, and string enum conversion.
-    /// </summary>
-    /// <remarks>
-    /// Options:
-    /// - PropertyNamingPolicy: CamelCase (e.g., "testName" instead of "TestName")
-    /// - WriteIndented: false (compact JSON for efficient transmission)
-    /// - DefaultIgnoreCondition: WhenWritingNull (reduces payload size)
-    /// - PropertyNameCaseInsensitive: true (tolerant deserialization)
-    /// - Converters: JsonStringEnumConverter (enums as strings for readability)
-    /// </remarks>
-    public static JsonSerializerOptions ApiOptions { get; } = CreateApiOptions();
-
     /// <summary>
     /// Gets JSON serialization options optimized for file persistence.
     /// Similar to API options but may include indentation for debugging.
@@ -57,22 +43,6 @@ public static class XpingSerializerOptions
     /// - Converters: JsonStringEnumConverter
     /// </remarks>
     public static JsonSerializerOptions TestOptions { get; } = CreateTestOptions();
-
-    private static JsonSerializerOptions CreateApiOptions()
-    {
-        var options = new JsonSerializerOptions
-        {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = false,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            PropertyNameCaseInsensitive = true,
-            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        };
-
-        options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
-
-        return options;
-    }
 
     private static JsonSerializerOptions CreateFileOptions()
     {

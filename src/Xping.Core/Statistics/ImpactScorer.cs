@@ -6,9 +6,9 @@
 using Xping.Cli.Report.Indexes;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
-using Xping.Sdk.Core.Models;
+using Xping.Session.Models;
 
-namespace Xping.Cli.Report.Scoring;
+namespace Xping.Core.Statistics;
 
 /// <summary>
 /// Turns a provider's observation into the single score every finding is ranked by.

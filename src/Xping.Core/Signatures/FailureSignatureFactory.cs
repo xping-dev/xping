@@ -6,10 +6,10 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Services.Diagnostics;
+using Xping.Session.Models.Executions;
+using Xping.Session.Diagnostics;
 
-namespace Xping.Cli.Report.Signatures;
+namespace Xping.Core.Signatures;
 
 /// <summary>
 /// Builds the signature one failure is grouped by.

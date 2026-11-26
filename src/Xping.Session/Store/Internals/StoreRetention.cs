@@ -5,7 +5,7 @@
 
 using Microsoft.Extensions.Logging;
 
-namespace Xping.Sdk.Core.Services.LocalStore.Internals;
+namespace Xping.Session.Store.Internals;
 
 /// <summary>
 /// Applies the age, count and size limits to a directory of session files.

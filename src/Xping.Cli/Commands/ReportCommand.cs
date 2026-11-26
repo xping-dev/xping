@@ -16,9 +16,9 @@ using Xping.Cli.Report.Store;
 using Xping.Cli.Report.Windowing;
 using Xping.Cli.Reporting;
 using Xping.Cli.Services;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Services.Environment;
-using Xping.Sdk.Core.Services.LocalStore;
+using Xping.Session.Models;
+using Xping.Providers.Environment;
+using Xping.Session.Store;
 
 namespace Xping.Cli.Commands;
 

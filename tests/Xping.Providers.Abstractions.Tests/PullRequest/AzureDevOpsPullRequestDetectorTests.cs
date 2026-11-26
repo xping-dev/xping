@@ -5,11 +5,11 @@
 
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using Xping.Sdk.Core.Models.PullRequests;
-using Xping.Sdk.Core.Services.Environment;
-using Xping.Sdk.Core.Services.PullRequest.Internals;
+using Xping.Session.Models.PullRequests;
+using Xping.Providers.Environment;
+using Xping.Providers.PullRequest.Internals;
 
-namespace Xping.Sdk.Core.Tests.Services.PullRequest;
+namespace Xping.Providers.Abstractions.Tests.PullRequest;
 
 public sealed class AzureDevOpsPullRequestDetectorTests
 {

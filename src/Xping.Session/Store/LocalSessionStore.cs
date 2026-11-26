@@ -5,9 +5,9 @@
 
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Xping.Sdk.Core.Services.LocalStore.Internals;
+using Xping.Session.Store.Internals;
 
-namespace Xping.Sdk.Core.Services.LocalStore;
+namespace Xping.Session.Store;
 
 /// <summary>
 /// Creates <see cref="ILocalSessionStore"/> instances over the on-disk local session store.

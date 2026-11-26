@@ -4,9 +4,9 @@
  */
 
 using System.Text.Json.Serialization;
-using Xping.Sdk.Core.Services.Serialization;
+using Xping.Session.Serialization;
 
-namespace Xping.Sdk.Core.Services.PullRequest.Internals;
+namespace Xping.Providers.PullRequest.Internals;
 
 /// <summary>
 /// The parts of the GitHub Actions event payload (the file at <c>GITHUB_EVENT_PATH</c>) the SDK reads.

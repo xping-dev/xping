@@ -6,7 +6,7 @@
 using Xping.Cli.Report.Contract;
 using Xping.Cli.Report.Rendering;
 using Xping.Cli.Reporting;
-using Xping.Sdk.Core.Models.Executions;
+using Xping.Session.Models.Executions;
 using static Xping.Cli.Tests.Report.ReportFixtures;
 using static Xping.Cli.Tests.Report.ReportText;
 

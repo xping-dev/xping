@@ -4,4 +4,9 @@
     <ProjectReference Include="..\..\src\Xping.Session\Xping.Session.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- A session file recorded by Xping.Sdk.Core before v1: the legacy format must stay readable. -->
+    <EmbeddedResource Include="Serialization\TestData\afbba725-d460-4b9f-88c6-a39c040e85aa.json" />
+  </ItemGroup>
+
 </Project>

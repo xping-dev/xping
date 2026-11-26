@@ -4,8 +4,8 @@
  */
 
 using Microsoft.Extensions.Logging;
-using Xping.Sdk.Core.Services.Environment;
-using Xping.Sdk.Core.Services.LocalStore;
+using Xping.Providers.Environment;
+using Xping.Session.Store;
 
 namespace Xping.Cli.Services;
 

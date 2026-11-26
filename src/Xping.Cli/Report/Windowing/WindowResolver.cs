@@ -5,8 +5,8 @@
 
 using System.Globalization;
 using Xping.Cli.Report.Store;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Services.LocalStore;
+using Xping.Session.Models;
+using Xping.Session.Store;
 
 namespace Xping.Cli.Report.Windowing;
 

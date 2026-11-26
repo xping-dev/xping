@@ -9,8 +9,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Xping.Cli.Commands;
 using Xping.Cli.Report;
 using Xping.Cli.Report.Model;
-using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Services.LocalStore;
+using Xping.Session.Models.Executions;
+using Xping.Session.Store;
 
 namespace Xping.Cli.Tests.Report;
 

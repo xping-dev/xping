@@ -8,7 +8,7 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.Text;
 
-namespace Xping.Sdk.Core.Services.PullRequest.Internals;
+namespace Xping.Providers.PullRequest.Internals;
 
 /// <summary>
 /// Minimal, read-only access to a <c>.git</c> directory: loose and packed refs, and the parents of

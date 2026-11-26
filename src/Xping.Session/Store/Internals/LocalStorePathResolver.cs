@@ -6,9 +6,9 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
-using Xping.Sdk.Core.Services.Diagnostics;
+using Xping.Session.Diagnostics;
 
-namespace Xping.Sdk.Core.Services.LocalStore.Internals;
+namespace Xping.Session.Store.Internals;
 
 /// <summary>
 /// Resolves the on-disk location of the local session store.
@@ -29,7 +29,7 @@ namespace Xping.Sdk.Core.Services.LocalStore.Internals;
 /// Only a start directory with neither above it keys the folder by itself.
 /// </para>
 /// <para>
-/// An explicit path (<c>XPING_LOCAL_STORE</c> or <see cref="Configuration.XpingConfiguration.LocalStorePath"/>)
+/// An explicit path (<c>XPING_LOCAL_STORE</c> or the SDK setting <c>LocalStorePath</c>)
 /// is read by the callers, never by this class: they read it once and hand it to the store, which
 /// passes it to <see cref="ResolveExplicit"/>. A test suite that sets the variable for the tool it
 /// tests would otherwise redirect where its own run is recorded.

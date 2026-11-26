@@ -6,14 +6,13 @@
 using System.Diagnostics;
 using System.Globalization;
 using Microsoft.Extensions.Logging.Abstractions;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Models.Builders;
-using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Services.LocalStore;
-using Xping.Sdk.Core.Services.LocalStore.Internals;
-using Xunit.Abstractions;
+using Xping.Session.Models;
+using Xping.Session.Models.Builders;
+using Xping.Session.Models.Executions;
+using Xping.Session.Store;
+using Xping.Session.Store.Internals;
 
-namespace Xping.Sdk.Core.Tests.LocalStore;
+namespace Xping.Session.Tests.Store;
 
 /// <summary>
 /// Guards the local store's performance budget.

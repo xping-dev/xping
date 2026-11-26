@@ -9,10 +9,10 @@ using System.Text.Json;
 using Xping.Cli.Commands;
 using Xping.Cli.Report;
 using Xping.Cli.Report.Model;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Services.LocalStore;
-using Xping.Sdk.Core.Services.LocalStore.Internals;
+using Xping.Session.Models;
+using Xping.Session.Models.Executions;
+using Xping.Session.Store;
+using Xping.Session.Store.Internals;
 
 namespace Xping.Cli.Tests.Report;
 

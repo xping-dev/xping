@@ -4,11 +4,10 @@
  */
 
 using Microsoft.Extensions.DependencyInjection;
-using Xping.Sdk.Core.Extensions;
-using Xping.Sdk.Core.Services.Identity;
-using Xping.Sdk.Core.Tests.Helpers;
+using Xping.Session.Identity;
+using Xping.Session.Identity.Internals;
 
-namespace Xping.Sdk.Core.Tests.Diagnostics;
+namespace Xping.Session.Tests.Diagnostics;
 
 /// <summary>
 /// Pins <c>errorMessageHash</c> for fixed messages. The hash is the failure signature Xping Cloud and
@@ -74,5 +73,5 @@ public sealed class MessageNormaliserPinTests
             BuildGenerator().GenerateErrorMessageHash(new string('Z', 5000)));
 
     private static ITestIdentityGenerator BuildGenerator() =>
-        ServiceHelper.CreateCollectorServices().BuildServiceProvider().GetRequiredService<ITestIdentityGenerator>();
+        new TestIdentityGenerator();
 }

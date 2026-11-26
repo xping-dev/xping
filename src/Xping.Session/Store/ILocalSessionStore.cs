@@ -3,9 +3,9 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Models;
+using Xping.Session.Models;
 
-namespace Xping.Sdk.Core.Services.LocalStore;
+namespace Xping.Session.Store;
 
 /// <summary>
 /// The result of reading sessions from the local store.

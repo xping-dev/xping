@@ -3,7 +3,7 @@
  * License: [MIT]
  */
 
-namespace Xping.Sdk.Core.Models.PullRequests;
+namespace Xping.Session.Models.PullRequests;
 
 /// <summary>
 /// Immutable pull request or merge request context detected from the CI/CD environment.

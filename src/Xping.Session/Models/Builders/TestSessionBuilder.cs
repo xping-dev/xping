@@ -3,12 +3,12 @@
  * License: [MIT]
  */
 
-using Xping.Sdk.Core.Models.Environments;
-using Xping.Sdk.Core.Models.Executions;
-using Xping.Sdk.Core.Models.PullRequests;
-using Xping.Sdk.Core.Models.Statistics;
+using Xping.Session.Models.Environments;
+using Xping.Session.Models.Executions;
+using Xping.Session.Models.PullRequests;
+using Xping.Session.Models.Statistics;
 
-namespace Xping.Sdk.Core.Models.Builders;
+namespace Xping.Session.Models.Builders;
 
 /// <summary>
 /// Builder for constructing immutable <see cref="TestSession"/> instances.

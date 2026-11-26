@@ -4,7 +4,7 @@
  */
 
 using System.Globalization;
-using Xping.Sdk.Core.Services.Environment;
+using Xping.Providers.Environment;
 
 namespace Xping.Cli.Commands;
 

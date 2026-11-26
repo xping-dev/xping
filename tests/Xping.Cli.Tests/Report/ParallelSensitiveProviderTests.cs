@@ -8,9 +8,9 @@ using Xping.Cli.Report;
 using Xping.Cli.Report.Contract;
 using Xping.Cli.Report.Model;
 using Xping.Cli.Report.Providers;
-using Xping.Cli.Report.Scoring;
-using Xping.Sdk.Core.Models;
-using Xping.Sdk.Core.Models.Executions;
+using Xping.Core.Statistics;
+using Xping.Session.Models;
+using Xping.Session.Models.Executions;
 
 namespace Xping.Cli.Tests.Report;
 

@@ -5,10 +5,10 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
-using Xping.Sdk.Core.Models.PullRequests;
-using Xping.Sdk.Core.Services.Environment;
+using Xping.Session.Models.PullRequests;
+using Xping.Providers.Environment;
 
-namespace Xping.Sdk.Core.Services.PullRequest.Internals;
+namespace Xping.Providers.PullRequest.Internals;
 
 /// <summary>
 /// Detects GitLab merge request context from GitLab CI/CD environment variables.
