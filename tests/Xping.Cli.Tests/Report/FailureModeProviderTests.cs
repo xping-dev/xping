@@ -1,0 +1,2065 @@
+/*
+ * © 2026 Xping.io. All Rights Reserved.
+ * License: [MIT]
+ */
+
+using System.Text.Json;
+using Xping.Cli.Report;
+using Xping.Cli.Report.Contract;
+using Xping.Cli.Report.Model;
+using Xping.Cli.Report.Providers;
+using Xping.Cli.Report.Windowing;
+using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Models.Executions;
+using Xping.Sdk.Core.Tests.Diagnostics;
+
+namespace Xping.Cli.Tests.Report;
+
+public sealed class FailureModeProviderTests
+{
+    private const string SharedType = "System.Net.Sockets.SocketException";
+    private const string SharedMessage = "Connection refused";
+
+    private static readonly string[] ClusterFixtureTests =
+        ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta"];
+
+    private static TestExecution Passing(string name) => TestSessionFactory.Execution(name);
+
+    /// <summary>A failure every test in a fixture can share, so it clusters.</summary>
+    private static TestExecution SharedFailure(string name, int durationMs = 100) =>
+        TestSessionFactory.Execution(
+            name,
+            TestOutcome.Failed,
+            durationMs: durationMs,
+            exceptionType: SharedType,
+            errorMessage: SharedMessage);
+
+    /// <summary>The same shared failure, recorded in a named lifecycle member.</summary>
+    private static TestExecution FixtureFailure(
+        string name, FailureSite site = FailureSite.TestSetup, string? member = "SampleTests.Setup") =>
+        TestSessionFactory.Execution(
+            name,
+            TestOutcome.Failed,
+            exceptionType: SharedType,
+            errorMessage: SharedMessage,
+            failureSite: site,
+            failureSiteMember: member);
+
+    /// <summary>A second failure every test can share, distinct from <see cref="SharedFailure"/>.</summary>
+    private static TestExecution OtherSharedFailure(string name) =>
+        TestSessionFactory.Execution(
+            name,
+            TestOutcome.Failed,
+            exceptionType: "System.TimeoutException",
+            errorMessage: "The operation timed out");
+
+    /// <summary>A failure whose signature is the test's own.</summary>
+    private static TestExecution Failure(
+        string name, string message = "unexpected null", int durationMs = 100) =>
+        TestSessionFactory.Execution(
+            name,
+            TestOutcome.Failed,
+            durationMs: durationMs,
+            exceptionType: "System.InvalidOperationException",
+            errorMessage: message,
+            stackTrace: $"   at MyApp.Tests.SampleTests.{name}()");
+
+    /// <summary>The same failure, recorded as one attempt of a run that retried.</summary>
+    private static TestExecution FailedAttempt(string name, int attempt, int maxRetries) =>
+        TestSessionFactory.Execution(
+            name,
+            TestOutcome.Failed,
+            attempt: attempt,
+            maxRetries: maxRetries,
+            exceptionType: "System.InvalidOperationException",
+            errorMessage: "unexpected null",
+            stackTrace: $"   at MyApp.Tests.SampleTests.{name}()");
+
+    /// <summary>
+    /// A window that was one long outage is counted, test by test.
+    /// </summary>
+    /// <remarks>
+    /// #185: nothing of any test's own behaviour was observed here — every occasion of every one of
+    /// them was discounted as environmental — and until the tally existed the whole suite came out
+    /// of this window reported as healthy. Awaiting runs rather than unreadable: what is missing is
+    /// an ordinary run, and the next one supplies it.
+    /// <para>
+    /// <c>SharedFailure</c> and <c>BrokenFixture</c> keep no tally at all. They are counted in
+    /// signature groups, and a count of groups under a field every other kind counts tests in is not
+    /// a number a reader can compare with the one beside it — absence says so where a zero would
+    /// claim the kind had looked.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void AWindowThatWasOneLongOutageIsCountedTestByTest()
+    {
+        TestSession[] sessions = EveryRunAnOutage();
+
+        int tests = TestSessionFactory.Context(sessions).Tests.Fingerprints.Count;
+
+        foreach (FindingKind kind in
+            (FindingKind[])
+            [FindingKind.Flaky, FindingKind.AlwaysFailing, FindingKind.TimingOut])
+        {
+            NotMeasuredCount count = NotMeasured(kind, sessions);
+
+            Assert.Equal(tests, count.AwaitingRuns);
+            Assert.Equal(0, count.Unreadable);
+        }
+
+        Assert.False(
+            new FailureModeProvider().Analyze(TestSessionFactory.Context(sessions))
+                .NotMeasured.ContainsKey(FindingKind.SharedFailure));
+    }
+
+    /// <summary>
+    /// A test the shared cause absorbed is reported, not counted as unmeasured.
+    /// </summary>
+    /// <remarks>
+    /// The discrimination the tally has to make. A test whose every failure was attributed to a
+    /// signature shared across the suite has not gone unmeasured — it is on the page, under the
+    /// group — and naming it here as well would state one finding twice in a line whose whole
+    /// purpose is to name questions whose answers are missing.
+    /// </remarks>
+    [Fact]
+    public void ATestWhoseEveryFailureWentIntoAClusterIsNotCountedAsUnmeasured()
+    {
+        // Four of thirty down together in every run: enough tests to be one cause, and far short of
+        // the ten failures and three in ten that would read as an outage.
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 6).Select(ordinal => TestSessionFactory.Session(
+                ordinal,
+                [
+                    .. Enumerable.Range(0, 4).Select(i => SharedFailure($"Down{i}")),
+                    .. Enumerable.Range(4, 26).Select(i => TestSessionFactory.Execution($"Fine{i}"))
+                ]))
+        ];
+
+        Assert.Equal(0, TestSessionFactory.Context(sessions).EnvironmentalSessionCount);
+        Assert.Contains(Analyze(sessions), c => c.Kind == FindingKind.SharedFailure);
+
+        Assert.True(NotMeasured(FindingKind.Flaky, sessions).IsEmpty);
+    }
+
+    /// <summary>
+    /// Builds a window in which every run looked like an outage.
+    /// </summary>
+    /// <remarks>
+    /// Twelve of thirty-one tests down in every one of six runs, which is what <c>SessionView.For</c>
+    /// reads as environmental. The subject passes throughout, and is discounted with everything
+    /// else: an environmental run is a run no test's own behaviour was observed on.
+    /// </remarks>
+    private static TestSession[] EveryRunAnOutage() =>
+    [
+        .. Enumerable.Range(0, 6).Select(ordinal => TestSessionFactory.Session(
+            ordinal,
+            [
+                TestSessionFactory.Execution("Subject"),
+                .. Enumerable.Range(0, 12).Select(i => SharedFailure($"Down{i}")),
+                .. Enumerable.Range(12, 18).Select(i => TestSessionFactory.Execution($"Fine{i}"))
+            ]))
+    ];
+
+    /// <summary>
+    /// A test that simply never failed was measured, and is counted nowhere.
+    /// </summary>
+    /// <remarks>
+    /// The common case, and the one that decides whether the number means anything: counting every
+    /// green test would make the tally the test count.
+    /// </remarks>
+    [Fact]
+    public void ATestThatNeverFailedIsMeasuredAndCountedNowhere()
+    {
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 6).Select(ordinal =>
+                TestSessionFactory.Session(ordinal, "Green"))
+        ];
+
+        Assert.Empty(Analyze(sessions));
+        Assert.True(NotMeasured(FindingKind.Flaky, sessions).IsEmpty);
+    }
+    private static List<FindingCandidate> Analyze(params TestSession[] sessions) =>
+        [.. new FailureModeProvider().Analyze(TestSessionFactory.Context(sessions)).Candidates];
+
+    private static NotMeasuredCount NotMeasured(FindingKind kind, params TestSession[] sessions) =>
+        new FailureModeProvider().Analyze(TestSessionFactory.Context(sessions))
+            .NotMeasured.GetValueOrDefault(kind);
+
+    private static FindingCandidate Single(List<FindingCandidate> candidates, FindingKind kind) =>
+        Assert.Single(candidates, c => c.Kind == kind);
+
+    private static FindingCandidate For(List<FindingCandidate> candidates, string name) =>
+        Assert.Single(
+            candidates,
+            c => c.Subject is FindingSubject.SingleTest test &&
+                 test.Test.TestFingerprint == $"fp-{name}");
+
+    /// <summary>
+    /// Builds sessions in which one test fails in the newest <paramref name="failing"/> of them.
+    /// </summary>
+    private static TestSession[] Runs(int total, int failing, Func<string, TestExecution>? failure = null)
+    {
+        failure ??= n => Failure(n);
+
+        return [.. Enumerable.Range(0, total).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                [ordinal >= total - failing ? failure("Subject") : Passing("Subject")]))];
+    }
+
+    /// <summary>A test the framework killed for overrunning the budget it declared.</summary>
+    private static TestExecution TimedOut(string name, int budgetMs = 500, int durationMs = 505) =>
+        TestSessionFactory.Execution(
+            name,
+            TestOutcome.Timeout,
+            durationMs: durationMs,
+            exceptionType: "Xunit.Sdk.TestTimeoutException",
+            errorMessage: $"Test execution timed out after {budgetMs} milliseconds",
+            timeoutBudgetMs: budgetMs);
+
+    [Fact]
+    public void ATestMostlyKilledForOverrunningItsBudgetIsTimingOut()
+    {
+        List<FindingCandidate> candidates = Analyze(Runs(total: 10, failing: 9, failure: n => TimedOut(n)));
+
+        FindingCandidate candidate = Single(candidates, FindingKind.TimingOut);
+        var evidence = Assert.IsType<TimingOutEvidence>(candidate.Evidence);
+
+        Assert.Equal(9, evidence.Timeouts);
+        Assert.Equal(9, evidence.Failures);
+        Assert.Equal(10, evidence.ExecutionsConsidered);
+        Assert.Equal(1.0, evidence.TimeoutShareOfFailures);
+        Assert.Equal(500, evidence.DeclaredBudgetMs);
+        Assert.Equal(9, evidence.ObservedDurationsMs.Count);
+        Assert.All(evidence.ObservedDurationsMs, ms => Assert.Equal(505, ms));
+    }
+
+    /// <summary>
+    /// The whole reason the kind exists: without it these nine hangs would be reported as a broken
+    /// test, with a failure signature built from a stack frame wherever the runner interrupted it.
+    /// </summary>
+    [Fact]
+    public void ATimingOutTestIsNotAlsoReportedAsAlwaysFailingOrFlaky()
+    {
+        List<FindingCandidate> candidates = Analyze(Runs(total: 10, failing: 9, failure: n => TimedOut(n)));
+
+        Assert.DoesNotContain(candidates, c => c.Kind == FindingKind.AlwaysFailing);
+        Assert.DoesNotContain(candidates, c => c.Kind == FindingKind.Flaky);
+    }
+
+    /// <summary>
+    /// A test that mostly disagrees with an assertion but hung once is still a failing test. Moving
+    /// it into the timeout bucket would point its reader at a deadlock that is not the problem.
+    /// </summary>
+    [Fact]
+    public void ATestFailingMostlyOnAssertionsStaysFlakyDespiteOneTimeout()
+    {
+        TestSession[] sessions = [.. Enumerable.Range(0, 10).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                [ordinal switch
+                {
+                    9 => TimedOut("Subject"),
+                    >= 5 => Failure("Subject"),
+                    _ => Passing("Subject"),
+                }]))];
+
+        List<FindingCandidate> candidates = Analyze(sessions);
+
+        Assert.DoesNotContain(candidates, c => c.Kind == FindingKind.TimingOut);
+        Single(candidates, FindingKind.Flaky);
+    }
+
+    /// <summary>
+    /// A budget is only recorded when the test declared one. When it did not, the limit it hit came
+    /// from a suite-wide or runner-level setting the session does not carry, and the finding says so
+    /// by omitting the field rather than inventing a number.
+    /// </summary>
+    [Fact]
+    public void ATimingOutTestWithNoDeclaredBudgetReportsNoBudget()
+    {
+        List<FindingCandidate> candidates = Analyze(Runs(
+            total: 10,
+            failing: 9,
+            failure: n => TestSessionFactory.Execution(n, TestOutcome.Timeout, errorMessage: "killed")));
+
+        var evidence = Assert.IsType<TimingOutEvidence>(Single(candidates, FindingKind.TimingOut).Evidence);
+
+        Assert.Null(evidence.DeclaredBudgetMs);
+    }
+
+    /// <summary>
+    /// The budget beside the observed duration is the reading the kind exists to publish, so it has
+    /// to survive into the sentence a reader is actually shown.
+    /// </summary>
+    [Fact]
+    public void TheTimingOutHeadlineNamesTheLimitTheTestWasKilledAt()
+    {
+        FindingCandidate candidate = Single(
+            Analyze(Runs(total: 10, failing: 9, failure: n => TimedOut(n))), FindingKind.TimingOut);
+
+        (string headline, IReadOnlyList<MetricDto> metrics) =
+            EvidenceHeadline.For(candidate.Kind, candidate.Evidence);
+
+        Assert.Equal("timed out 9 of 10 executions (90%) in 9 of 10 runs, killed at its 500ms limit", headline);
+        Assert.Contains(metrics, m => m.Label == "declared limit" && m.Value == "500ms");
+
+        // Only stated when the test also failed some other way; here every failure was a timeout.
+        Assert.DoesNotContain(metrics, m => m.Label == "share of failures");
+    }
+
+    /// <summary>
+    /// When a test both hangs and fails ordinarily, the split is the reason it was reported as
+    /// timing out rather than as a plain failure, so the finding states it. It is omitted when every
+    /// failure was a timeout, where "7 of 7" would be noise.
+    /// </summary>
+    [Fact]
+    public void TheTimingOutMetricsStateTheSplitWhenTheTestAlsoFailsOtherWays()
+    {
+        // 6 timeouts and 3 assertion failures: over the 50% share, but not all of them.
+        TestSession[] sessions = [.. Enumerable.Range(0, 10).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                [ordinal switch
+                {
+                    >= 4 => TimedOut("Subject"),
+                    >= 1 => Failure("Subject"),
+                    _ => Passing("Subject"),
+                }]))];
+
+        FindingCandidate candidate = Single(Analyze(sessions), FindingKind.TimingOut);
+        var evidence = Assert.IsType<TimingOutEvidence>(candidate.Evidence);
+
+        Assert.Equal(6, evidence.Timeouts);
+        Assert.Equal(9, evidence.Failures);
+
+        (_, IReadOnlyList<MetricDto> metrics) = EvidenceHeadline.For(candidate.Kind, candidate.Evidence);
+
+        Assert.Contains(metrics, m => m.Label == "share of failures" && m.Value == "6 of 9 (66.7%)");
+    }
+
+    [Fact]
+    public void AFewFailuresThatWereAllKillsAreStillReportedAsTimingOut()
+    {
+        // Three failures, all of them kills, in a ten-execution window. This classification stays on
+        // the share rather than its lower bound, which would have asked for nine kills in ten: the
+        // flaky branch groups failure signatures, and a killed run leaves none worth grouping, so
+        // being cautious here would hand the reader an assertion message that was never written
+        // rather than the duration against the budget that explains the hang.
+        TestSession[] sessions = [.. Enumerable.Range(0, 10).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                [ordinal >= 7 ? TimedOut("Subject") : Passing("Subject")]))];
+
+        FindingCandidate candidate = Single(Analyze(sessions), FindingKind.TimingOut);
+        var evidence = Assert.IsType<TimingOutEvidence>(candidate.Evidence);
+
+        Assert.Equal(3, evidence.Timeouts);
+        Assert.Equal(3, evidence.Failures);
+
+        // The ranking term is still bounded, so the finding is reported and sorts where three
+        // observations of ten deserve.
+        Assert.Equal(0.108, candidate.Unreliability, 3);
+    }
+
+    [Fact]
+    public void TheTimingOutHeadlineSaysSoWhenTheTestDeclaredNoLimit()
+    {
+        FindingCandidate candidate = Single(
+            Analyze(Runs(
+                total: 10,
+                failing: 9,
+                failure: n => TestSessionFactory.Execution(n, TestOutcome.Timeout, errorMessage: "killed"))),
+            FindingKind.TimingOut);
+
+        (string headline, IReadOnlyList<MetricDto> metrics) =
+            EvidenceHeadline.For(candidate.Kind, candidate.Evidence);
+
+        Assert.DoesNotContain("limit", headline, StringComparison.Ordinal);
+        Assert.Contains(metrics, m => m.Label == "declared limit" && m.Value == "none declared by the test");
+    }
+
+    [Fact]
+    public void ATestFailingAlmostAlwaysTheSameWayIsAlwaysFailing()
+    {
+        List<FindingCandidate> candidates = Analyze(Runs(total: 10, failing: 9));
+
+        FindingCandidate candidate = Single(candidates, FindingKind.AlwaysFailing);
+        var evidence = Assert.IsType<AlwaysFailingEvidence>(candidate.Evidence);
+
+        Assert.Equal(9, evidence.Failures);
+        Assert.Equal(10, evidence.ExecutionsConsidered);
+
+        // The published rate is the point estimate; the ranking term is its lower bound. Nine of
+        // ten is 0.90 either way to a reader, and 0.60 against the other findings in the report.
+        Assert.Equal(0.9, evidence.FailureRate);
+        Assert.Equal(0.596, candidate.Unreliability, 3);
+    }
+
+    [Fact]
+    public void OneRunShortOfTheThresholdIsFlakyInstead()
+    {
+        // 8 of 10. The band is where a broken test stops being a flaky one, and it has to be tested
+        // from both sides or the comparison could be inverted and nothing would notice.
+        List<FindingCandidate> candidates = Analyze(Runs(total: 10, failing: 8));
+
+        FindingCandidate candidate = Single(candidates, FindingKind.Flaky);
+        var evidence = Assert.IsType<FlakyEvidence>(candidate.Evidence);
+
+        Assert.Equal(0.8, evidence.FailureRate);
+        Assert.Equal(1, evidence.DistinctSignatureCount);
+    }
+
+    /// <summary>
+    /// A flaky finding names each way it failed, most frequent first, and its metrics only count them.
+    /// </summary>
+    /// <remarks>
+    /// "3 failure modes" is a count, and the question it raises is which three. A failure the
+    /// adapter recorded nothing about is still a mode, published as unavailable rather than invented.
+    /// </remarks>
+    [Fact]
+    public void AFlakyFindingNamesEachFailureModeAndItsMetricsCountThem()
+    {
+        TestSession[] sessions = [.. Enumerable.Range(0, 10).Select(ordinal =>
+            TestSessionFactory.Session(ordinal, [ordinal switch
+            {
+                < 3 => Failure("Subject"),
+                < 5 => TestSessionFactory.Execution(
+                    "Subject",
+                    TestOutcome.Failed,
+                    exceptionType: "System.TimeoutException",
+                    errorMessage: "The operation timed out"),
+                5 => TestSessionFactory.Execution("Subject", TestOutcome.Failed),
+                _ => Passing("Subject"),
+            }]))];
+
+        FindingCandidate candidate = Single(Analyze(sessions), FindingKind.Flaky);
+
+        (_, IReadOnlyList<MetricDto> metrics) = EvidenceHeadline.For(candidate.Kind, candidate.Evidence);
+        IReadOnlyList<FailureModeDto> modes = FailureModes.Of(candidate.Evidence);
+
+        Assert.Equal([("failure modes", "3")], metrics.Skip(2).Select(m => (m.Label, m.Value)));
+        Assert.Equal(
+            [
+                ("System.InvalidOperationException", "unexpected null", 3, false),
+                ("System.TimeoutException", "the operation timed out", 2, false),
+                (null, "", 1, true)
+            ],
+            modes.Select(m => (m.ExceptionType, m.Message, m.Occurrences, m.Unavailable)));
+    }
+
+    /// <summary>
+    /// Two modes of one exception type are told apart by their messages.
+    /// </summary>
+    [Fact]
+    public void FailureModesOfOneTypeAreToldApartByTheirMessages()
+    {
+        TestSession[] sessions = RunsFailingWith(passing: 5, "expected apple but was pear", "expected dog but was cat");
+
+        FindingCandidate candidate = Single(Analyze(sessions), FindingKind.Flaky);
+
+        IReadOnlyList<FailureModeDto> modes = FailureModes.Of(candidate.Evidence);
+
+        Assert.Equal(2, modes.Count);
+        Assert.Equal(2, modes.Select(m => m.Message).Distinct(StringComparer.Ordinal).Count());
+        Assert.All(modes, mode => Assert.Equal("System.InvalidOperationException", mode.ExceptionType));
+    }
+
+    /// <summary>
+    /// Every mode is published, however many: how many to print is the renderer's choice.
+    /// </summary>
+    [Fact]
+    public void EveryFailureModeIsPublishedAndNoneBecomesAMetric()
+    {
+        TestSession[] sessions = RunsFailingWith(
+            passing: 10, [.. Enumerable.Range(0, 8).Select(i => $"unexpected {(char)('a' + i)}")]);
+
+        FindingCandidate candidate = Single(Analyze(sessions), FindingKind.Flaky);
+
+        (_, IReadOnlyList<MetricDto> metrics) = EvidenceHeadline.For(candidate.Kind, candidate.Evidence);
+
+        Assert.Equal(8, FailureModes.Of(candidate.Evidence).Count);
+        Assert.DoesNotContain(metrics, m => m.Label.StartsWith("failure mode ", StringComparison.Ordinal));
+        Assert.DoesNotContain(metrics, m => m.Label == "more failure modes");
+    }
+
+    [Fact]
+    public void ATestThatFailsEveryRunTheSameWayIsAlwaysFailing()
+    {
+        List<FindingCandidate> candidates = Analyze(Runs(total: 8, failing: 8));
+
+        var evidence = Assert.IsType<AlwaysFailingEvidence>(
+            Single(candidates, FindingKind.AlwaysFailing).Evidence);
+
+        Assert.Equal(1.0, evidence.FailureRate);
+        Assert.Null(evidence.Contrast);
+    }
+
+    [Fact]
+    public void ATestThatFailsEveryRunADifferentWayIsFlaky()
+    {
+        // The entropy arm. The rate says broken; the varying failure mode says something else is
+        // going on, and the specification calls that flaky whatever the rate.
+        TestSession[] sessions = [.. Enumerable.Range(0, 8).Select(ordinal =>
+            TestSessionFactory.Session(ordinal, [Failure("Subject", $"unexpected {(char)('a' + ordinal)}")]))];
+
+        List<FindingCandidate> candidates = Analyze(sessions);
+
+        var evidence = Assert.IsType<FlakyEvidence>(Single(candidates, FindingKind.Flaky).Evidence);
+
+        Assert.Equal(1.0, evidence.FailureRate);
+        Assert.Equal(8, evidence.DistinctSignatureCount);
+    }
+
+    [Fact]
+    public void UnreliabilityPeaksAtAnEvenSplit()
+    {
+        // The tent is discounted by the share of the rate its lower bound supports, so the peak is
+        // approached rather than reached: an even split over ten runs is worth less than the same
+        // split over forty, and neither claims the certainty the raw ratio used to hand both.
+        double ten = Single(Analyze(Runs(total: 10, failing: 5)), FindingKind.Flaky).Unreliability;
+        double forty = Single(Analyze(Runs(total: 40, failing: 20)), FindingKind.Flaky).Unreliability;
+        double lopsided = Single(Analyze(Runs(total: 40, failing: 8)), FindingKind.Flaky).Unreliability;
+
+        Assert.Equal(0.473, ten, 3);
+        Assert.Equal(0.704, forty, 3);
+        Assert.True(forty > lopsided, $"{forty} > {lopsided}");
+    }
+
+    [Fact]
+    public void UnreliabilityRisesWithTheRunsBehindTheSameRate()
+    {
+        // The property the whole ranking rests on: two tests failing half their runs are not the
+        // same finding when one of them ran five times and the other forty.
+        double[] scores =
+        [
+            Single(Analyze(Runs(total: 10, failing: 5)), FindingKind.Flaky).Unreliability,
+            Single(Analyze(Runs(total: 20, failing: 10)), FindingKind.Flaky).Unreliability,
+            Single(Analyze(Runs(total: 40, failing: 20)), FindingKind.Flaky).Unreliability
+        ];
+
+        for (int i = 1; i < scores.Length; i++)
+            Assert.True(scores[i] > scores[i - 1], $"{scores[i]} > {scores[i - 1]}");
+    }
+
+    [Fact]
+    public void UnreliabilityRisesWithTheRunsBehindARateAboveTheTentsPeak()
+    {
+        // Above the peak the tent falls away, so a term evaluated at the bound rather than
+        // discounted by it goes *down* as the evidence accumulates: four of five scored 0.75 and
+        // thirty-two of forty scored 0.69, with eight in ten worst of all at 0.98. Four failure
+        // modes keep this test flaky at a rate that would otherwise classify it as broken.
+        double[] scores =
+        [
+            Single(Analyze(FailingFourWaysIn(total: 5, failing: 4)), FindingKind.Flaky).Unreliability,
+            Single(Analyze(FailingFourWaysIn(total: 10, failing: 8)), FindingKind.Flaky).Unreliability,
+            Single(Analyze(FailingFourWaysIn(total: 20, failing: 16)), FindingKind.Flaky).Unreliability,
+            Single(Analyze(FailingFourWaysIn(total: 40, failing: 32)), FindingKind.Flaky).Unreliability
+        ];
+
+        for (int i = 1; i < scores.Length; i++)
+            Assert.True(scores[i] > scores[i - 1], $"{scores[i]} > {scores[i - 1]}");
+    }
+
+    /// <summary>
+    /// Builds a window where the subject fails at four in five, cycling through four failure modes
+    /// so that no single mode dominates and the test stays flaky rather than becoming broken.
+    /// </summary>
+    private static TestSession[] FailingFourWaysIn(int total, int failing) =>
+        [.. Enumerable.Range(0, total).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                [
+                    ordinal >= total - failing
+                        ? Failure("Subject", $"unexpected {(char)('a' + (ordinal % 4))}")
+                        : Passing("Subject")
+                ]))];
+
+    /// <summary>Repeats one assertion message, so several failures share one signature.</summary>
+    private static string[] Said(int times, string message) =>
+        [.. Enumerable.Repeat(message, times)];
+
+    /// <summary>
+    /// Builds sessions in which one test passes <paramref name="passing"/> times and then fails
+    /// once per entry in <paramref name="messages"/>, newest last.
+    /// </summary>
+    private static TestSession[] RunsFailingWith(int passing, params string[] messages) =>
+    [
+        .. Enumerable.Range(0, passing)
+            .Select(ordinal => TestSessionFactory.Session(ordinal, [Passing("Subject")])),
+        .. messages.Select((message, index) =>
+            TestSessionFactory.Session(passing + index, [Failure("Subject", message)]))
+    ];
+
+    [Fact]
+    public void ABrokenTestWhoseMessageNamesTheDataIsStillAlwaysFailing()
+    {
+        // The defect this pair of thresholds exists for. Signatures compare messages exactly, so an
+        // assertion that prints the value it saw produces one mode per value; requiring a single
+        // mode demoted a test failing 19 runs in 20 to flaky over a name in a string.
+        TestSession[] sessions = RunsFailingWith(
+            passing: 1,
+            [
+                .. Said(17, "Expected: \"Alice\" but was: \"Bob\""),
+                .. Said(2, "Expected: \"Alice\" but was: \"Carol\"")
+            ]);
+
+        FindingCandidate candidate = Single(Analyze(sessions), FindingKind.AlwaysFailing);
+        var evidence = Assert.IsType<AlwaysFailingEvidence>(candidate.Evidence);
+
+        Assert.Equal(19, evidence.Failures);
+        Assert.Equal(0.95, evidence.FailureRate);
+        Assert.Equal(0.895, evidence.ModalSignatureShare);
+        Assert.Equal(17, evidence.Signature.Occurrences);
+        Assert.Equal(0.764, candidate.Unreliability, 3);
+    }
+
+    [Fact]
+    public void ATestFailingHalfTheTimeInTenWaysIsStillFlaky()
+    {
+        // The other side of the same judgement. A dominant mode is what separates a broken test from
+        // a flaky one, and ten modes across ten failures is not one.
+        TestSession[] sessions = RunsFailingWith(
+            passing: 10,
+            [.. Enumerable.Range(0, 10).Select(i => $"unexpected {(char)('a' + i)}")]);
+
+        var evidence = Assert.IsType<FlakyEvidence>(Single(Analyze(sessions), FindingKind.Flaky).Evidence);
+
+        Assert.Equal(0.5, evidence.FailureRate);
+        Assert.Equal(10, evidence.DistinctSignatureCount);
+    }
+
+    /// <summary>
+    /// Builds sessions in which one test passes <paramref name="passing"/> times, then fails with
+    /// nothing recorded <paramref name="failed"/> times and times out with nothing recorded
+    /// <paramref name="timedOut"/> times.
+    /// </summary>
+    private static TestSession[] RunsFailingBlank(int passing, int failed, int timedOut) =>
+    [
+        .. Enumerable.Range(0, passing + failed + timedOut).Select(ordinal => TestSessionFactory.Session(
+            ordinal,
+            [
+                ordinal < passing ? Passing("Subject")
+                : ordinal < passing + failed ? TestSessionFactory.Execution("Subject", TestOutcome.Failed)
+                : TestSessionFactory.Execution("Subject", TestOutcome.Timeout)
+            ]))
+    ];
+
+    [Fact]
+    public void ATestFailingEveryRunWithNothingRecordedIsAlwaysFailingThoughSomeAttemptsTimedOut()
+    {
+        // Blank timeouts and blank failures are two modes (#320), 60% and 40%, neither dominant on
+        // its own. Both recorded nothing, so the gate pools them, and the timeouts are too few for
+        // TimingOut.
+        var evidence = Assert.IsType<AlwaysFailingEvidence>(
+            Single(Analyze(RunsFailingBlank(passing: 0, failed: 6, timedOut: 4)), FindingKind.AlwaysFailing).Evidence);
+
+        Assert.True(evidence.Signature.Unavailable);
+        Assert.False(evidence.Signature.TimedOut);
+        Assert.Equal(6, evidence.Signature.Occurrences);
+        Assert.Equal(0.6, evidence.ModalSignatureShare);
+    }
+
+    [Fact]
+    public void AFlakyTestCountsItsBlankTimeoutsAsAModeOfTheirOwn()
+    {
+        var evidence = Assert.IsType<FlakyEvidence>(
+            Single(Analyze(RunsFailingBlank(passing: 10, failed: 3, timedOut: 2)), FindingKind.Flaky).Evidence);
+
+        Assert.Equal(2, evidence.DistinctSignatureCount);
+        Assert.Equal([false, true], evidence.DistinctSignatures.Select(s => s.TimedOut));
+        Assert.Equal([3, 2], evidence.DistinctSignatures.Select(s => s.Occurrences));
+    }
+
+    [Fact]
+    public void AtTheDominantShareTheTestIsBrokenAndBelowItFlaky()
+    {
+        // The band is tested from both sides, as the rate is: 14 of 20 failures agreeing is the
+        // threshold itself, 13 is one short of it, and a comparison written the wrong way round
+        // would pass one of these and not the other.
+        TestSession[] atThreshold = RunsFailingWith(
+            passing: 0,
+            [.. Said(14, "the cart was not empty"), .. Said(6, "the cart held a stale item")]);
+
+        TestSession[] belowThreshold = RunsFailingWith(
+            passing: 0,
+            [.. Said(13, "the cart was not empty"), .. Said(7, "the cart held a stale item")]);
+
+        var broken = Assert.IsType<AlwaysFailingEvidence>(
+            Single(Analyze(atThreshold), FindingKind.AlwaysFailing).Evidence);
+
+        Assert.Equal(0.7, broken.ModalSignatureShare);
+
+        var flaky = Assert.IsType<FlakyEvidence>(
+            Single(Analyze(belowThreshold), FindingKind.Flaky).Evidence);
+
+        Assert.Equal(2, flaky.DistinctSignatureCount);
+    }
+
+    [Fact]
+    public void ATestThatFailsOneWayOnlyPublishesTheWholeShare()
+    {
+        var evidence = Assert.IsType<AlwaysFailingEvidence>(
+            Single(Analyze(Runs(total: 10, failing: 9)), FindingKind.AlwaysFailing).Evidence);
+
+        Assert.Equal(1.0, evidence.ModalSignatureShare);
+    }
+
+    [Fact]
+    public void UnreliabilityNeverFallsBelowTheBoundedFailureRate()
+    {
+        // The tent alone scored a test failing 19 of 20 runs at 0.10 against a coin flip's 1.00,
+        // costing the most broken tests in a suite 0.34 of their impact for being more broken. Ten
+        // distinct modes keep this one flaky, which is exactly where the collapse used to happen.
+        TestSession[] sessions = RunsFailingWith(
+            passing: 1,
+            [
+                .. Enumerable.Range(0, 10).Select(i => $"unexpected {(char)('a' + i)}"),
+                .. Said(9, "unexpected a")
+            ]);
+
+        FindingCandidate candidate = Single(Analyze(sessions), FindingKind.Flaky);
+        var evidence = Assert.IsType<FlakyEvidence>(candidate.Evidence);
+
+        Assert.Equal(0.95, evidence.FailureRate);
+        Assert.Equal(10, evidence.DistinctSignatureCount);
+
+        // The floor still holds, now against the bounded rate. The tent alone would put a rate of
+        // 0.95 at 0.10, and the floor lifts it to the rate; discounting that by the share of the
+        // rate the evidence supports leaves the term at the bound itself, 19 of 20 being 0.764.
+        Assert.Equal(0.764, candidate.Unreliability, 3);
+    }
+
+    [Fact]
+    public void TheDominantSignatureIsTheOneMostFailuresCarried()
+    {
+        // Ordered on the counts that survived discounting rather than the index's window-wide ones,
+        // because the head of this list is read as the mode the test meets most often — by the
+        // classification above it and by whoever opens the report.
+        TestSession[] sessions = RunsFailingWith(
+            passing: 0,
+            [.. Said(3, "the cart held a stale item"), .. Said(17, "the cart was not empty")]);
+
+        var evidence = Assert.IsType<AlwaysFailingEvidence>(
+            Single(Analyze(sessions), FindingKind.AlwaysFailing).Evidence);
+
+        Assert.Equal(17, evidence.Signature.Occurrences);
+        Assert.Equal("the cart was not empty", evidence.Signature.Message);
+    }
+
+    [Fact]
+    public void ATestThatNeverFailsProducesNothing() =>
+        Assert.Empty(Analyze(Runs(total: 6, failing: 0)));
+
+    [Fact]
+    public void ThreeTestsFailingAlikeInOneRunBecomeOneFinding()
+    {
+        // The behaviour the whole report is for: three failures, one cause.
+        TestSession[] sessions =
+        [
+            TestSessionFactory.Session(0, [Passing("Alpha"), Passing("Beta"), Passing("Gamma")]),
+            TestSessionFactory.Session(1, [Passing("Alpha"), Passing("Beta"), Passing("Gamma")]),
+            TestSessionFactory.Session(2, [Passing("Alpha"), Passing("Beta"), Passing("Gamma")]),
+            TestSessionFactory.Session(3, [Passing("Alpha"), Passing("Beta"), Passing("Gamma")]),
+            TestSessionFactory.Session(
+                4, [SharedFailure("Alpha"), SharedFailure("Beta"), SharedFailure("Gamma")])
+        ];
+
+        List<FindingCandidate> candidates = Analyze(sessions);
+
+        FindingCandidate candidate = Single(candidates, FindingKind.SharedFailure);
+        var evidence = Assert.IsType<SharedFailureEvidence>(candidate.Evidence);
+
+        Assert.Equal(3, evidence.MemberCount);
+        Assert.Equal(3, evidence.MaxTestsInOneSession);
+        Assert.Equal(
+            ["fp-Alpha", "fp-Beta", "fp-Gamma"],
+            evidence.Members.Select(m => m.Fingerprint));
+    }
+
+    [Fact]
+    public void EachClusterMemberCarriesItsOwnFailureCount()
+    {
+        // The members share a cause, not a history. A test the cluster took out three times is not
+        // evidence of the same weight as one it took out once, and the report says which is which.
+        TestSession[] sessions =
+        [
+            .. FourQuietRuns(),
+            TestSessionFactory.Session(
+                4, [SharedFailure("Alpha"), SharedFailure("Beta"), SharedFailure("Gamma")]),
+            TestSessionFactory.Session(
+                5, [SharedFailure("Alpha"), SharedFailure("Beta"), Passing("Gamma")]),
+            TestSessionFactory.Session(
+                6, [SharedFailure("Alpha"), Passing("Beta"), Passing("Gamma")])
+        ];
+
+        var evidence = Assert.IsType<SharedFailureEvidence>(
+            Single(Analyze(sessions), FindingKind.SharedFailure).Evidence);
+
+        Assert.Equal(
+            ["fp-Alpha", "fp-Beta", "fp-Gamma"],
+            evidence.Members.Select(m => m.Fingerprint));
+        Assert.Equal([3, 2, 1], evidence.Members.Select(m => m.Failures));
+        Assert.Equal(6, evidence.Failures);
+    }
+
+    /// <summary>Amendment 4B.</summary>
+    [Fact]
+    public void EachClusterMemberCarriesTheRunsItEndedRedAndTheRunsItWasJudgedIn()
+    {
+        // A repro reruns one or a few members, so its count is sized from theirs and not the
+        // cluster's. Alpha fails twice in one run, which is one run. Beta's retry passed in the
+        // second, so a rerun of that run comes back green. Gamma was skipped in the last, which is
+        // no verdict.
+        TestSession[] sessions =
+        [
+            .. FourQuietRuns(),
+            TestSessionFactory.Session(
+                4,
+                [
+                    SharedFailure("Alpha"),
+                    TestSessionFactory.Execution(
+                        "Alpha", TestOutcome.Failed, attempt: 2, exceptionType: SharedType, errorMessage: SharedMessage),
+                    SharedFailure("Beta"),
+                    SharedFailure("Gamma")
+                ]),
+            TestSessionFactory.Session(
+                5,
+                [
+                    SharedFailure("Alpha"),
+                    SharedFailure("Beta"),
+                    TestSessionFactory.Execution("Beta", attempt: 2, passedOnRetry: true),
+                    Passing("Gamma")
+                ]),
+            TestSessionFactory.Session(
+                6, [Passing("Alpha"), Passing("Beta"), TestSessionFactory.Execution("Gamma", TestOutcome.Skipped)])
+        ];
+
+        var evidence = Assert.IsType<SharedFailureEvidence>(
+            Single(Analyze(sessions), FindingKind.SharedFailure).Evidence);
+
+        Assert.Equal([3, 2, 1], evidence.Members.Select(m => m.Failures));
+        Assert.Equal([2, 1, 1], evidence.Members.Select(m => m.RunsFailed));
+        Assert.Equal([7, 7, 6], evidence.Members.Select(m => m.RunsJudged));
+    }
+
+    /// <summary>Amendment 4A.</summary>
+    [Fact]
+    public void AFlakyTestCountsTheRunsItEndedRedAndTheRunsItWasJudgedIn()
+    {
+        // Ten runs: failed outright in the last two, failed then passed on retry in the one before,
+        // and skipped in the first.
+        TestSession[] sessions = [.. Enumerable.Range(0, 10).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                ordinal switch
+                {
+                    0 => [TestSessionFactory.Execution("Subject", TestOutcome.Skipped)],
+                    7 => [FailedAttempt("Subject", 1, 1), TestSessionFactory.Execution("Subject", attempt: 2, passedOnRetry: true, maxRetries: 1)],
+                    >= 8 => [Failure("Subject")],
+                    _ => [Passing("Subject")]
+                }))];
+
+        var evidence = Assert.IsType<FlakyEvidence>(Single(Analyze(sessions), FindingKind.Flaky).Evidence);
+
+        Assert.Equal(3, evidence.SessionsWithFailures);
+        Assert.Equal(2, evidence.RunsFailed);
+        Assert.Equal(9, evidence.RunsJudged);
+    }
+
+    /// <summary>Amendment 4A.</summary>
+    [Fact]
+    public void ATimingOutTestCountsOnlyTheRunsItTimedOutIn()
+    {
+        TestSession[] sessions = [.. Enumerable.Range(0, 10).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                ordinal switch
+                {
+                    9 => [Failure("Subject")],
+                    >= 4 => [TimedOut("Subject")],
+                    _ => [Passing("Subject")]
+                }))];
+
+        var evidence = Assert.IsType<TimingOutEvidence>(Single(Analyze(sessions), FindingKind.TimingOut).Evidence);
+
+        Assert.Equal(5, evidence.RunsFailed);
+        Assert.Equal(10, evidence.RunsJudged);
+    }
+
+    [Fact]
+    public void ClusterExemplarsAreOneMemberEachInOrdinalOrder()
+    {
+        // Which three, not just how many. Six members failed in one run, so the three exemplars are
+        // the ordinally first three — Alpha, Beta and Delta, which is not the order they were
+        // recorded in. Durations stand in for identity, since the exemplars of one cluster carry
+        // the same exception and message by construction.
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 4).Select(ordinal =>
+                TestSessionFactory.Session(ordinal, [.. ClusterFixtureTests.Select(Passing)])),
+            TestSessionFactory.Session(
+                4,
+                [.. ClusterFixtureTests.Select((name, index) => SharedFailure(name, 10 + index))])
+        ];
+
+        var evidence = Assert.IsType<SharedFailureEvidence>(
+            Single(Analyze(sessions), FindingKind.SharedFailure).Evidence);
+
+        Assert.Equal([10L, 11L, 13L], evidence.Exemplars.Select(e => e.DurationMs));
+    }
+
+    /// <summary>
+    /// The point of the failure site: the same three failures, but every one of them recorded in the
+    /// same setup method, so the report can name the member to fix instead of listing three tests.
+    /// </summary>
+    [Fact]
+    public void ThreeTestsBlockedByOneLifecycleMemberNameIt()
+    {
+        TestSession[] sessions =
+        [
+            .. FourQuietRuns(),
+            TestSessionFactory.Session(
+                4, [FixtureFailure("Alpha"), FixtureFailure("Beta"), FixtureFailure("Gamma")])
+        ];
+
+        FindingCandidate candidate = Single(Analyze(sessions), FindingKind.BrokenFixture);
+        var evidence = Assert.IsType<BrokenFixtureEvidence>(candidate.Evidence);
+
+        Assert.Equal("SampleTests.Setup", evidence.Member);
+        Assert.Equal(nameof(FailureSite.TestSetup), evidence.Site);
+        Assert.Equal(3, evidence.TestsBlocked);
+        Assert.Equal(
+            ["fp-Alpha", "fp-Beta", "fp-Gamma"],
+            evidence.Members.Select(m => m.Fingerprint));
+    }
+
+    /// <summary>
+    /// A broken fixture replaces the shared failure rather than joining it. Reporting both would
+    /// charge one cause twice — the thing clustering exists to prevent.
+    /// </summary>
+    [Fact]
+    public void ABrokenFixtureIsNotAlsoReportedAsASharedFailure()
+    {
+        TestSession[] sessions =
+        [
+            .. FourQuietRuns(),
+            TestSessionFactory.Session(
+                4, [FixtureFailure("Alpha"), FixtureFailure("Beta"), FixtureFailure("Gamma")])
+        ];
+
+        List<FindingCandidate> candidates = Analyze(sessions);
+
+        Assert.DoesNotContain(candidates, c => c.Kind == FindingKind.SharedFailure);
+        Assert.Single(candidates);
+    }
+
+    /// <summary>
+    /// Two different broken setup methods failing with one signature are two defects. Naming either
+    /// would send the reader to the wrong one, so the finding claims only what it can support.
+    /// </summary>
+    [Fact]
+    public void FailuresDisagreeingOnTheMemberStayASharedFailure()
+    {
+        TestSession[] sessions =
+        [
+            .. FourQuietRuns(),
+            TestSessionFactory.Session(
+                4,
+                [
+                    FixtureFailure("Alpha", member: "SampleTests.Setup"),
+                    FixtureFailure("Beta", member: "OtherTests.Setup"),
+                    FixtureFailure("Gamma", member: "SampleTests.Setup")
+                ])
+        ];
+
+        List<FindingCandidate> candidates = Analyze(sessions);
+
+        Assert.Single(candidates, c => c.Kind == FindingKind.SharedFailure);
+        Assert.DoesNotContain(candidates, c => c.Kind == FindingKind.BrokenFixture);
+    }
+
+    /// <summary>
+    /// One failure the adapter could not place is enough to withhold the claim. Sites are all-or
+    /// nothing here because the finding points at a line of code, and a majority vote is not evidence
+    /// that the minority came from the same place.
+    /// </summary>
+    [Fact]
+    public void OneFailureWithoutASiteKeepsTheClusterASharedFailure()
+    {
+        TestSession[] sessions =
+        [
+            .. FourQuietRuns(),
+            TestSessionFactory.Session(
+                4, [FixtureFailure("Alpha"), FixtureFailure("Beta"), SharedFailure("Gamma")])
+        ];
+
+        List<FindingCandidate> candidates = Analyze(sessions);
+
+        Assert.Single(candidates, c => c.Kind == FindingKind.SharedFailure);
+        Assert.DoesNotContain(candidates, c => c.Kind == FindingKind.BrokenFixture);
+    }
+
+    /// <summary>
+    /// A test body is not a fixture. Three tests failing alike inside their own bodies is a shared
+    /// cause the report cannot name, which is exactly what a shared failure says.
+    /// </summary>
+    [Fact]
+    public void FailuresInTheTestBodyAreNotABrokenFixture()
+    {
+        TestSession[] sessions =
+        [
+            .. FourQuietRuns(),
+            TestSessionFactory.Session(
+                4,
+                [
+                    FixtureFailure("Alpha", FailureSite.TestBody, member: null),
+                    FixtureFailure("Beta", FailureSite.TestBody, member: null),
+                    FixtureFailure("Gamma", FailureSite.TestBody, member: null)
+                ])
+        ];
+
+        List<FindingCandidate> candidates = Analyze(sessions);
+
+        Assert.Single(candidates, c => c.Kind == FindingKind.SharedFailure);
+        Assert.DoesNotContain(candidates, c => c.Kind == FindingKind.BrokenFixture);
+    }
+
+    /// <summary>
+    /// An unresolved site is an admission, not an observation, and must not license the claim.
+    /// </summary>
+    [Fact]
+    public void FailuresWithAnUnknownSiteAreNotABrokenFixture()
+    {
+        TestSession[] sessions =
+        [
+            .. FourQuietRuns(),
+            TestSessionFactory.Session(
+                4,
+                [
+                    FixtureFailure("Alpha", FailureSite.Unknown, member: null),
+                    FixtureFailure("Beta", FailureSite.Unknown, member: null),
+                    FixtureFailure("Gamma", FailureSite.Unknown, member: null)
+                ])
+        ];
+
+        Assert.Single(Analyze(sessions), c => c.Kind == FindingKind.SharedFailure);
+    }
+
+    /// <summary>
+    /// The subject is the same cluster whichever kind describes it, so promoting it must not move the
+    /// finding's id — otherwise every stored finding would move the first time an adapter learned to
+    /// name a member.
+    /// </summary>
+    [Fact]
+    public void PromotingAClusterDoesNotChangeItsSubject()
+    {
+        TestSession[] unnamed =
+        [
+            .. FourQuietRuns(),
+            TestSessionFactory.Session(
+                4, [SharedFailure("Alpha"), SharedFailure("Beta"), SharedFailure("Gamma")])
+        ];
+
+        TestSession[] named =
+        [
+            .. FourQuietRuns(),
+            TestSessionFactory.Session(
+                4, [FixtureFailure("Alpha"), FixtureFailure("Beta"), FixtureFailure("Gamma")])
+        ];
+
+        FindingCandidate shared = Single(Analyze(unnamed), FindingKind.SharedFailure);
+        FindingCandidate fixture = Single(Analyze(named), FindingKind.BrokenFixture);
+
+        Assert.Equal(shared.Subject.SortKey, fixture.Subject.SortKey);
+    }
+
+    /// <summary>Four runs in which nothing fails, so a cluster in the fifth is the only finding.</summary>
+    private static TestSession[] FourQuietRuns() =>
+        [.. Enumerable.Range(0, 4).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal, [Passing("Alpha"), Passing("Beta"), Passing("Gamma")]))];
+
+    [Fact]
+    public void ClusterMembersDoNotAlsoAppearIndividually()
+    {
+        // The replacement rule. Without it, "47 failures" stays 47 findings and the cause is the
+        // forty-eighth line nobody reads.
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 4).Select(ordinal =>
+                TestSessionFactory.Session(
+                    ordinal, [Passing("Alpha"), Passing("Beta"), Passing("Gamma")])),
+            TestSessionFactory.Session(
+                4, [SharedFailure("Alpha"), SharedFailure("Beta"), SharedFailure("Gamma")])
+        ];
+
+        List<FindingCandidate> candidates = Analyze(sessions);
+
+        Assert.Single(candidates);
+        Assert.Equal(FindingKind.SharedFailure, candidates[0].Kind);
+    }
+
+    [Fact]
+    public void AMembersOtherFailuresStillCountAgainstItIndividually()
+    {
+        // "Failures of a member test outside the cluster still count normally."
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 3).Select(ordinal =>
+                TestSessionFactory.Session(
+                    ordinal, [Passing("Alpha"), Passing("Beta"), Passing("Gamma")])),
+            TestSessionFactory.Session(
+                3, [Failure("Alpha", "its own problem"), Passing("Beta"), Passing("Gamma")]),
+            TestSessionFactory.Session(
+                4, [SharedFailure("Alpha"), SharedFailure("Beta"), SharedFailure("Gamma")])
+        ];
+
+        List<FindingCandidate> candidates = Analyze(sessions);
+
+        Assert.Single(candidates, c => c.Kind == FindingKind.SharedFailure);
+
+        var evidence = Assert.IsType<FlakyEvidence>(For(candidates, "Alpha").Evidence);
+
+        // One failure of its own, counted against the four runs that were not the cluster's.
+        Assert.Equal(1, evidence.Failures);
+        Assert.Equal(4, evidence.ExecutionsConsidered);
+        Assert.Equal(1, evidence.DiscountedClustered);
+        Assert.Equal(1, evidence.DistinctSignatureCount);
+    }
+
+    [Fact]
+    public void TwoTestsFailingAlikeAreACoincidenceAndReportedSeparately()
+    {
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 4).Select(ordinal =>
+                TestSessionFactory.Session(ordinal, [Passing("Alpha"), Passing("Beta")])),
+            TestSessionFactory.Session(4, [SharedFailure("Alpha"), SharedFailure("Beta")])
+        ];
+
+        List<FindingCandidate> candidates = Analyze(sessions);
+
+        Assert.DoesNotContain(candidates, c => c.Kind == FindingKind.SharedFailure);
+        Assert.Equal(2, candidates.Count(c => c.Kind == FindingKind.Flaky));
+    }
+
+    [Fact]
+    public void ThreeTestsFailingAlikeInThreeDifferentRunsIsNotACluster()
+    {
+        // Spread across runs the claim is much weaker: nothing links the three failures except that
+        // they look alike, and counting that would be the report inventing a cause.
+        TestSession[] sessions =
+        [
+            TestSessionFactory.Session(0, [Passing("Alpha"), Passing("Beta"), Passing("Gamma")]),
+            TestSessionFactory.Session(1, [Passing("Alpha"), Passing("Beta"), Passing("Gamma")]),
+            TestSessionFactory.Session(2, [SharedFailure("Alpha"), Passing("Beta"), Passing("Gamma")]),
+            TestSessionFactory.Session(3, [Passing("Alpha"), SharedFailure("Beta"), Passing("Gamma")]),
+            TestSessionFactory.Session(4, [Passing("Alpha"), Passing("Beta"), SharedFailure("Gamma")])
+        ];
+
+        List<FindingCandidate> candidates = Analyze(sessions);
+
+        Assert.DoesNotContain(candidates, c => c.Kind == FindingKind.SharedFailure);
+        Assert.Equal(3, candidates.Count(c => c.Kind == FindingKind.Flaky));
+    }
+
+    [Fact]
+    public void AnEnvironmentalRunIsLeftOutOfATestsOwnFailureRate()
+    {
+        // One broken dependency knocks over a third of the suite. Counting that run against each
+        // test individually would poison every rate in the report for as long as it stays in view.
+        List<TestExecution> outage =
+        [
+            .. Enumerable.Range(0, 12).Select(i => Failure($"Broken{i}")),
+            .. Enumerable.Range(0, 18).Select(i => Passing($"Fine{i}"))
+        ];
+
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 5).Select(ordinal => TestSessionFactory.Session(
+                ordinal,
+                [
+                    .. Enumerable.Range(0, 12).Select(i => Passing($"Broken{i}")),
+                    .. Enumerable.Range(0, 18).Select(i => Passing($"Fine{i}"))
+                ])),
+            TestSessionFactory.Session(5, outage)
+        ];
+
+        AnalysisContext context = TestSessionFactory.Context(sessions);
+
+        Assert.Equal(1, context.EnvironmentalSessionCount);
+        Assert.True(context.SessionViews[0].IsLikelyEnvironmental);
+        Assert.Empty(new FailureModeProvider().Analyze(context).Candidates);
+    }
+
+    [Fact]
+    public void AnEnvironmentalRunIsStillWhereASharedCauseIsFound()
+    {
+        // The exception to the discounting rule, and the reason it exists: the run everything failed
+        // in is precisely where the one cause is visible.
+        List<TestExecution> outage =
+        [
+            .. Enumerable.Range(0, 12).Select(i => SharedFailure($"Broken{i}")),
+            .. Enumerable.Range(0, 18).Select(i => Passing($"Fine{i}"))
+        ];
+
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 5).Select(ordinal => TestSessionFactory.Session(
+                ordinal,
+                [
+                    .. Enumerable.Range(0, 12).Select(i => Passing($"Broken{i}")),
+                    .. Enumerable.Range(0, 18).Select(i => Passing($"Fine{i}"))
+                ])),
+            TestSessionFactory.Session(5, outage)
+        ];
+
+        List<FindingCandidate> candidates = Analyze(sessions);
+
+        var evidence = Assert.IsType<SharedFailureEvidence>(
+            Single(candidates, FindingKind.SharedFailure).Evidence);
+
+        Assert.Equal(12, evidence.MemberCount);
+    }
+
+    [Fact]
+    public void TheTwoDiscountsAreReportedApartAndAccountForEveryExecution()
+    {
+        // A test caught by both exclusions, which is the case that made one summed count useless:
+        // "3 discounted" says nothing about whether the rate was narrowed by a bad afternoon or by a
+        // cause already reported elsewhere, and a reader chasing a surprising rate has to know which.
+        //
+        // Six runs of a thirty-test suite. Alpha fails once on its own, once as part of a cluster,
+        // and once inside an outage. Only the first is Alpha's.
+        IEnumerable<TestExecution> Rest() =>
+            Enumerable.Range(0, 27).Select(i => Passing($"Fine{i}"));
+
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 3).Select(ordinal => TestSessionFactory.Session(
+                ordinal,
+                [Passing("Alpha"), Passing("Beta"), Passing("Gamma"), .. Rest()])),
+
+            TestSessionFactory.Session(
+                3,
+                [Failure("Alpha", "its own problem"), Passing("Beta"), Passing("Gamma"), .. Rest()]),
+
+            // Three of thirty: a cluster, and nowhere near wide enough to read as an outage.
+            TestSessionFactory.Session(
+                4,
+                [SharedFailure("Alpha"), SharedFailure("Beta"), SharedFailure("Gamma"), .. Rest()]),
+
+            // Twelve of thirty, each failing its own way: an outage, and not a cluster.
+            TestSessionFactory.Session(
+                5,
+                [
+                    Failure("Alpha"),
+                    Failure("Beta"),
+                    Failure("Gamma"),
+                    .. Enumerable.Range(0, 9).Select(i => Failure($"Fine{i}")),
+                    .. Enumerable.Range(9, 18).Select(i => Passing($"Fine{i}"))
+                ])
+        ];
+
+        AnalysisContext context = TestSessionFactory.Context(sessions);
+
+        Assert.Equal(1, context.EnvironmentalSessionCount);
+
+        List<FindingCandidate> candidates =
+            [.. new FailureModeProvider().Analyze(context).Candidates];
+
+        var evidence = Assert.IsType<FlakyEvidence>(For(candidates, "Alpha").Evidence);
+
+        Assert.Equal(1, evidence.Failures);
+        Assert.Equal(4, evidence.ExecutionsConsidered);
+        Assert.Equal(1, evidence.DiscountedEnvironmental);
+        Assert.Equal(1, evidence.DiscountedClustered);
+
+        // The arithmetic the split exists to make possible: what the test actually ran, which is not
+        // the denominator the published rate is over.
+        Assert.Equal(
+            sessions.Length,
+            evidence.ExecutionsConsidered +
+            evidence.DiscountedEnvironmental +
+            evidence.DiscountedClustered);
+
+        Assert.Equal(0.25, evidence.FailureRate);
+
+        // #182. Alpha ran in all six runs; the outage is not one of the occasions its own behaviour
+        // was observed on, so the finding rests on five. The cluster is not deducted — it removed a
+        // failure, not a run: Alpha still ran there and still did not fail on its own account.
+        FindingCandidate flaky = For(candidates, "Alpha");
+        Assert.Equal(6, context.Tests.SessionsRunIn("fp-Alpha"));
+        Assert.Equal(5, flaky.EvidenceSessions);
+
+        // Amendment 4A: the repro's counts discount the same way. The outage is no run of Alpha's,
+        // and the clustered failure leaves its run judged but not one Alpha ended red on its own.
+        var own = Assert.IsType<FlakyEvidence>(flaky.Evidence);
+        Assert.Equal(1, own.RunsFailed);
+        Assert.Equal(5, own.RunsJudged);
+
+        // The shared cause keeps every run, environmental ones included — an outage is a shared
+        // cause seen from underneath — so its own evidence is the whole of its members' history.
+        FindingCandidate shared = Single(candidates, FindingKind.SharedFailure);
+        Assert.Equal(6, shared.EvidenceSessions);
+    }
+
+    [Fact]
+    public void FailuresWithNothingRecordedNeverClusterTogether()
+    {
+        // The MSTest shape. Every one of these failures carries the same absence of detail, and a
+        // signature built from that alone would report the entire suite as one shared cause.
+        TestExecution Blank(string name) => TestSessionFactory.Execution(name, TestOutcome.Failed);
+
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 4).Select(ordinal =>
+                TestSessionFactory.Session(
+                    ordinal, [Passing("Alpha"), Passing("Beta"), Passing("Gamma")])),
+            TestSessionFactory.Session(4, [Blank("Alpha"), Blank("Beta"), Blank("Gamma")])
+        ];
+
+        List<FindingCandidate> candidates = Analyze(sessions);
+
+        Assert.DoesNotContain(candidates, c => c.Kind == FindingKind.SharedFailure);
+        Assert.Equal(3, candidates.Count(c => c.Kind == FindingKind.Flaky));
+
+        var evidence = Assert.IsType<FlakyEvidence>(For(candidates, "Alpha").Evidence);
+
+        Assert.Equal(1, evidence.DistinctSignatureCount);
+        Assert.True(evidence.DistinctSignatures[0].Unavailable);
+    }
+
+    [Fact]
+    public void ATestThatAlwaysFailsBlanklyIsStillAlwaysFailing()
+    {
+        // The sentinel has to stay one signature per test, or a suite whose adapter records nothing
+        // would read as though every test varied its failure mode.
+        TestSession[] sessions = Runs(
+            total: 10,
+            failing: 10,
+            failure: n => TestSessionFactory.Execution(n, TestOutcome.Failed));
+
+        var evidence = Assert.IsType<AlwaysFailingEvidence>(
+            Single(Analyze(sessions), FindingKind.AlwaysFailing).Evidence);
+
+        Assert.True(evidence.Signature.Unavailable);
+    }
+
+    [Fact]
+    public void AFailureWithoutAStackTraceIsStillClassified()
+    {
+        TestSession[] sessions = Runs(
+            total: 10,
+            failing: 10,
+            failure: n => TestSessionFactory.Execution(
+                n,
+                TestOutcome.Failed,
+                exceptionType: "System.TimeoutException",
+                errorMessage: "the operation timed out"));
+
+        var evidence = Assert.IsType<AlwaysFailingEvidence>(
+            Single(Analyze(sessions), FindingKind.AlwaysFailing).Evidence);
+
+        Assert.False(evidence.Signature.Unavailable);
+        Assert.True(evidence.Signature.Degraded);
+        Assert.Empty(evidence.Signature.Frames);
+    }
+
+    [Fact]
+    public void AFailureWithNoUserFramesIsClassifiedAndFlaggedDegraded()
+    {
+        TestSession[] sessions = Runs(
+            total: 10,
+            failing: 10,
+            failure: n => TestSessionFactory.Execution(
+                n,
+                TestOutcome.Failed,
+                exceptionType: "Xunit.Sdk.TrueException",
+                errorMessage: "assertion failed",
+                stackTrace: RealFailureSamples.FrameworkOnlyStackTrace));
+
+        var evidence = Assert.IsType<AlwaysFailingEvidence>(
+            Single(Analyze(sessions), FindingKind.AlwaysFailing).Evidence);
+
+        Assert.True(evidence.Signature.Degraded);
+        Assert.NotEmpty(evidence.Signature.Frames);
+    }
+
+    [Fact]
+    public void EveryFailedAttemptContributesItsOwnSignature()
+    {
+        // A test that fails one way, is retried and fails another way has varied its failure mode.
+        // Reading only the last attempt would throw away the observation entirely.
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 4).Select(ordinal =>
+                TestSessionFactory.Session(ordinal, [Passing("Subject")])),
+            TestSessionFactory.Session(
+                4,
+                [
+                    TestSessionFactory.Execution(
+                        "Subject", TestOutcome.Failed, attempt: 1,
+                        exceptionType: "System.TimeoutException", errorMessage: "timed out"),
+                    TestSessionFactory.Execution(
+                        "Subject", TestOutcome.Failed, attempt: 2,
+                        exceptionType: "System.InvalidOperationException", errorMessage: "bad state")
+                ])
+        ];
+
+        var evidence = Assert.IsType<FlakyEvidence>(
+            Single(Analyze(sessions), FindingKind.Flaky).Evidence);
+
+        Assert.Equal(2, evidence.Failures);
+        Assert.Equal(2, evidence.DistinctSignatureCount);
+    }
+
+    [Fact]
+    public void EveryRateArrivesWithItsDenominators()
+    {
+        var evidence = Assert.IsType<FlakyEvidence>(
+            Single(Analyze(Runs(total: 10, failing: 3)), FindingKind.Flaky).Evidence);
+
+        Assert.Equal(0.3, evidence.FailureRate);
+        Assert.Equal(3, evidence.Failures);
+        Assert.Equal(10, evidence.ExecutionsConsidered);
+        Assert.Equal(10, evidence.SessionsConsidered);
+        Assert.Equal(3, evidence.SessionsWithFailures);
+    }
+
+    [Fact]
+    public void NoMoreThanThreeExemplarsAreCarried()
+    {
+        var evidence = Assert.IsType<FlakyEvidence>(
+            Single(Analyze(Runs(total: 10, failing: 7)), FindingKind.Flaky).Evidence);
+
+        Assert.Equal(3, evidence.Exemplars.Count);
+    }
+
+    [Fact]
+    public void ExemplarsCoverDistinctFailureModesBeforeRepeatingOne()
+    {
+        // Three exemplars of the same failure answer a question nobody asked.
+        TestSession[] sessions = [.. Enumerable.Range(0, 9).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal, [Failure("Subject", $"mode {(char)('a' + (ordinal % 3))}")]))];
+
+        var evidence = Assert.IsType<FlakyEvidence>(
+            Single(Analyze(sessions), FindingKind.Flaky).Evidence);
+
+        Assert.Equal(3, evidence.Exemplars.Count);
+        Assert.Equal(3, evidence.Exemplars.Select(e => e.SignatureHash).Distinct().Count());
+    }
+
+    [Fact]
+    public void ThreeExemplarsOfOneFailureModeAreTheThreeMostRecent()
+    {
+        // A test that only ever fails one way still gets three exemplars, and which three is not
+        // incidental: they are the most recent, so they describe what the test does now rather than
+        // what it did a fortnight ago.
+        TestSession[] sessions = [.. Enumerable.Range(0, 10).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                [ordinal >= 5
+                    ? Failure("Subject", durationMs: 100 + ordinal)
+                    : Passing("Subject")]))];
+
+        var evidence = Assert.IsType<FlakyEvidence>(
+            Single(Analyze(sessions), FindingKind.Flaky).Evidence);
+
+        Assert.Equal([109L, 108L, 107L], evidence.Exemplars.Select(e => e.DurationMs));
+    }
+
+    [Fact]
+    public void TheThirdExemplarRepeatsAModeOnlyAfterBothHaveBeenShown()
+    {
+        // Two modes, three slots. Each mode is shown once before either is shown twice, so the
+        // third exemplar is the newest of what is left over — which is not the third newest
+        // failure, and is the whole point of spreading them.
+        TestSession[] sessions = [.. Enumerable.Range(0, 10).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                [ordinal >= 6
+                    ? Failure("Subject", ordinal == 7 ? "mode b" : "mode a", 100 + ordinal)
+                    : Passing("Subject")]))];
+
+        var evidence = Assert.IsType<FlakyEvidence>(
+            Single(Analyze(sessions), FindingKind.Flaky).Evidence);
+
+        // Newest of mode a, then newest of mode b, then the next newest failure overall.
+        Assert.Equal([109L, 107L, 108L], evidence.Exemplars.Select(e => e.DurationMs));
+    }
+
+    [Fact]
+    public void ExemplarsOfARetriedRunAreItsEarliestAttempts()
+    {
+        // Nothing promises an adapter writes a run's attempts in order, and the exemplars must not
+        // depend on it: this run recorded its seventh attempt first.
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 7).Select(ordinal =>
+                TestSessionFactory.Session(ordinal, [Passing("Subject")])),
+            TestSessionFactory.Session(7, [Failure("Subject")]),
+            TestSessionFactory.Session(8, [Failure("Subject")]),
+            TestSessionFactory.Session(
+                9,
+                [.. Enumerable.Range(1, 7).Reverse().Select(
+                    attempt => FailedAttempt("Subject", attempt, maxRetries: 6))])
+        ];
+
+        var evidence = Assert.IsType<FlakyEvidence>(
+            Single(Analyze(sessions), FindingKind.Flaky).Evidence);
+
+        Assert.Equal([1, 2, 3], evidence.Exemplars.Select(e => e.AttemptNumber));
+    }
+
+    [Fact]
+    public void TwoFailuresRecordedAlikeInOneRunStillOrderTheSameWay()
+    {
+        // The last tie-break. Two executions of one test in one run, recorded by an adapter that
+        // tracks no retry metadata, agree on everything the order reads except their execution ids
+        // — and the exemplars have to pick the same one every time, or the published report moves
+        // between runs over an unchanged store.
+        TestExecution second = TestSessionFactory.Execution(
+            "Subject",
+            TestOutcome.Failed,
+            durationMs: 100,
+            executionId: new Guid("00000000-0000-0000-0000-0000000000bb"),
+            retry: false,
+            exceptionType: "System.InvalidOperationException",
+            errorMessage: "unexpected null",
+            stackTrace: "   at MyApp.Tests.SampleTests.Subject()");
+
+        TestExecution first = TestSessionFactory.Execution(
+            "Subject",
+            TestOutcome.Failed,
+            durationMs: 300,
+            executionId: new Guid("00000000-0000-0000-0000-0000000000aa"),
+            retry: false,
+            exceptionType: "System.InvalidOperationException",
+            errorMessage: "unexpected null",
+            stackTrace: "   at MyApp.Tests.SampleTests.Subject()");
+
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 7).Select(ordinal =>
+                TestSessionFactory.Session(ordinal, [Passing("Subject")])),
+            TestSessionFactory.Session(7, [Failure("Subject", durationMs: 400)]),
+            TestSessionFactory.Session(8, [Failure("Subject", durationMs: 200)]),
+
+            // Recorded id-descending, which is not the order they are published in.
+            TestSessionFactory.Session(9, [second, first])
+        ];
+
+        var evidence = Assert.IsType<FlakyEvidence>(
+            Single(Analyze(sessions), FindingKind.Flaky).Evidence);
+
+        Assert.Equal([300L, 100L, 200L], evidence.Exemplars.Select(e => e.DurationMs));
+    }
+
+    [Fact]
+    public void ALongMessageIsCutToTheBudgetAndMarked()
+    {
+        string huge = new('x', LocalAnalysisConstants.ExemplarCharBudget + 200);
+
+        TestSession[] sessions = Runs(total: 6, failing: 6, failure: n => Failure(n, huge));
+
+        var evidence = Assert.IsType<AlwaysFailingEvidence>(
+            Single(Analyze(sessions), FindingKind.AlwaysFailing).Evidence);
+
+        string? message = evidence.Exemplars[0].ErrorMessage;
+
+        Assert.NotNull(message);
+        Assert.StartsWith(new string('x', LocalAnalysisConstants.ExemplarCharBudget), message, StringComparison.Ordinal);
+        Assert.EndsWith("(truncated)", message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnExemplarCarriesTheExtractedFramesRatherThanTheRawTrace()
+    {
+        TestSession[] sessions = Runs(
+            total: 6,
+            failing: 6,
+            failure: n => TestSessionFactory.Execution(
+                n,
+                TestOutcome.Failed,
+                exceptionType: "Xunit.Sdk.TrueException",
+                errorMessage: RealFailureSamples.XunitWatchdogFirstRun,
+                stackTrace: RealFailureSamples.XunitWatchdogStackTrace));
+
+        var evidence = Assert.IsType<AlwaysFailingEvidence>(
+            Single(Analyze(sessions), FindingKind.AlwaysFailing).Evidence);
+
+        Assert.Equal(
+            ["SampleApp.XUnit.SampleTests.FlakyTest_EnvironmentState_FailsBasedOnSystemState()"],
+            evidence.Exemplars[0].StackTrace);
+    }
+
+    [Fact]
+    public void AFlakyTestCarriesOnePassingContrast()
+    {
+        var evidence = Assert.IsType<FlakyEvidence>(
+            Single(Analyze(Runs(total: 10, failing: 4)), FindingKind.Flaky).Evidence);
+
+        Assert.NotNull(evidence.Contrast);
+        Assert.Equal("Passed", evidence.Contrast.Outcome);
+    }
+
+    [Fact]
+    public void ATestThatNeverPassedCarriesNoContrastRatherThanAnEmptyOne()
+    {
+        var evidence = Assert.IsType<AlwaysFailingEvidence>(
+            Single(Analyze(Runs(total: 6, failing: 6)), FindingKind.AlwaysFailing).Evidence);
+
+        Assert.Null(evidence.Contrast);
+    }
+
+    [Fact]
+    public void ASignatureSeenOnlyInTheNewestRunIsMarkedNew()
+    {
+        List<FindingCandidate> candidates = Analyze(Runs(total: 10, failing: 1));
+
+        var evidence = Assert.IsType<FlakyEvidence>(Single(candidates, FindingKind.Flaky).Evidence);
+        SignatureView signature = evidence.DistinctSignatures[0];
+
+        Assert.True(signature.FirstSeenInLatestSession);
+        Assert.True(signature.FirstSeenAfterFirstRun);
+        Assert.Equal(0, signature.FirstSeenSessionsAgo);
+    }
+
+    [Fact]
+    public void ASignaturePresentSinceTheOldestRunIsNotMarkedNew()
+    {
+        List<FindingCandidate> candidates = Analyze(Runs(total: 10, failing: 10));
+
+        var evidence = Assert.IsType<AlwaysFailingEvidence>(
+            Single(candidates, FindingKind.AlwaysFailing).Evidence);
+
+        Assert.False(evidence.Signature.FirstSeenInLatestSession);
+        Assert.False(evidence.Signature.FirstSeenAfterFirstRun);
+        Assert.Equal(9, evidence.Signature.FirstSeenSessionsAgo);
+    }
+
+    /// <summary>
+    /// A mode is dated by the failures it counts, so the date never names a run the count set aside.
+    /// </summary>
+    /// <remarks>
+    /// Its oldest failure fell in a run where a third of the suite went down. That run is discounted,
+    /// and a date pointing at it would sit beside a count that excludes it.
+    /// </remarks>
+    [Fact]
+    public void AModesFirstSeenIsItsOldestCountedFailureNotAnEnvironmentalOne()
+    {
+        TestSession[] sessions = SubjectFailingIn(environmental: 2, counted: 6);
+
+        var evidence = Assert.IsType<FlakyEvidence>(Single(Analyze(sessions), FindingKind.Flaky).Evidence);
+        SignatureView signature = Assert.Single(evidence.DistinctSignatures);
+
+        Assert.Equal(1, signature.Occurrences);
+        Assert.Equal(3, signature.FirstSeenSessionsAgo);
+        Assert.Equal(sessions[6].StartedAt, signature.FirstSeenAt);
+        Assert.Equal("sha-of-run-6", signature.FirstSeenSha);
+
+        // Whether it is new is asked of every failure: it was there in the run set aside.
+        Assert.True(signature.FirstSeenAfterFirstRun);
+        Assert.False(signature.FirstSeenInLatestSession);
+    }
+
+    /// <summary>
+    /// A test that joined the window late and failed this way in its first run did not regress when
+    /// it joined, so the mode is not new, though the window's oldest runs never saw it (#319).
+    /// </summary>
+    [Fact]
+    public void AModeALateTestHadFromItsFirstRunIsNotNew()
+    {
+        TestSession[] sessions = [.. Enumerable.Range(0, 12).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                [
+                    .. ordinal < 4 ? [] : new[] { ordinal is 4 or 8 ? Failure("Subject") : Passing("Subject") },
+                    .. Enumerable.Range(0, 6).Select(i => Passing($"Other{i}"))
+                ]))];
+
+        var evidence = Assert.IsType<FlakyEvidence>(Single(Analyze(sessions), FindingKind.Flaky).Evidence);
+        SignatureView signature = Assert.Single(evidence.DistinctSignatures);
+
+        Assert.Equal(7, signature.FirstSeenSessionsAgo);
+        Assert.False(signature.FirstSeenAfterFirstRun);
+        Assert.False(signature.FirstSeenInLatestSession);
+    }
+
+    /// <summary>
+    /// A cluster is measured from its members' first run, so tests that joined together and failed
+    /// together from the start are not a new cluster (#319).
+    /// </summary>
+    [Fact]
+    public void AClusterWhoseMembersFailedFromTheirFirstRunIsNotNew()
+    {
+        string[] members = ["Alpha", "Beta", "Gamma"];
+        TestSession[] sessions = [.. Enumerable.Range(0, 9).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                [
+                    .. ordinal < 4
+                        ? []
+                        : members.Select(m => ordinal is 4 or 8 ? SharedFailure(m) : Passing(m)),
+                    .. Enumerable.Range(0, 6).Select(i => Passing($"Other{i}"))
+                ]))];
+
+        var evidence = Assert.IsType<SharedFailureEvidence>(
+            Single(Analyze(sessions), FindingKind.SharedFailure).Evidence);
+
+        Assert.Equal(4, evidence.Signature.FirstSeenSessionsAgo);
+        Assert.False(evidence.Signature.FirstSeenAfterFirstRun);
+        Assert.False(evidence.Signature.FirstSeenInLatestSession);
+    }
+
+    /// <summary>
+    /// One member that joined late does not make a cluster the others had all along look new.
+    /// </summary>
+    [Fact]
+    public void AClusterIsMeasuredFromItsOldestMembersFirstRun()
+    {
+        TestSession[] sessions = [.. Enumerable.Range(0, 9).Select(ordinal =>
+            TestSessionFactory.Session(
+                ordinal,
+                [
+                    ordinal is 6 or 8 ? SharedFailure("Alpha") : Passing("Alpha"),
+                    ordinal is 6 or 8 ? SharedFailure("Beta") : Passing("Beta"),
+                    .. ordinal < 6 ? [] : new[] { ordinal is 6 or 8 ? SharedFailure("Gamma") : Passing("Gamma") },
+                    .. Enumerable.Range(0, 6).Select(i => Passing($"Other{i}"))
+                ]))];
+
+        var evidence = Assert.IsType<SharedFailureEvidence>(
+            Single(Analyze(sessions), FindingKind.SharedFailure).Evidence);
+
+        // Alpha and Beta ran from the window's start without it, so it arrived at run 6.
+        Assert.Equal(2, evidence.Signature.FirstSeenSessionsAgo);
+        Assert.True(evidence.Signature.FirstSeenAfterFirstRun);
+    }
+
+    /// <summary>
+    /// <c>--test</c> lists a test's modes under the hashes its finding's evidence uses, so a reader
+    /// can join one to the other.
+    /// </summary>
+    [Fact]
+    public void ATestsFailureModesShareTheHashesOfItsFindingsEvidence()
+    {
+        AnalysisContext context = TestSessionFactory.Context(FailingFourWaysIn(total: 20, failing: 8));
+
+        FindingCandidate flaky = Assert.Single(
+            new FailureModeProvider().Analyze(context).Candidates, c => c.Kind == FindingKind.Flaky);
+        var evidence = Assert.IsType<FlakyEvidence>(flaky.Evidence);
+        string fingerprint = Assert.Single(flaky.Subject.Tests).TestFingerprint;
+
+        Assert.Equal(
+            evidence.DistinctSignatures.Select(s => s.Hash).Order(StringComparer.Ordinal),
+            FailureModes.Of(context, fingerprint).Select(m => m.Hash).Order(StringComparer.Ordinal));
+    }
+
+    /// <summary>
+    /// Setting the window's oldest run aside does not make a mode that was already there new.
+    /// </summary>
+    [Fact]
+    public void AModeInTheWindowsOldestRunIsNotNewWhenThatRunIsDiscounted()
+    {
+        TestSession[] sessions = SubjectFailingIn(environmental: 0, counted: 6);
+
+        var evidence = Assert.IsType<FlakyEvidence>(Single(Analyze(sessions), FindingKind.Flaky).Evidence);
+        SignatureView signature = Assert.Single(evidence.DistinctSignatures);
+
+        Assert.Equal(3, signature.FirstSeenSessionsAgo);
+        Assert.False(signature.FirstSeenAfterFirstRun);
+        Assert.False(signature.FirstSeenInLatestSession);
+    }
+
+    /// <summary>
+    /// Ten runs, oldest first, in which <c>Subject</c> fails the same way twice: once in a run where a
+    /// third of the suite fails too, and once on its own.
+    /// </summary>
+    private static TestSession[] SubjectFailingIn(int environmental, int counted) =>
+    [
+        .. Enumerable.Range(0, 10).Select(ordinal => TestSessionFactory.Session(
+            ordinal,
+            [
+                ordinal == environmental || ordinal == counted ? Failure("Subject") : Passing("Subject"),
+                .. Enumerable.Range(0, 12).Select(i =>
+                    ordinal == environmental ? Failure($"Broken{i}") : Passing($"Broken{i}")),
+                .. Enumerable.Range(0, 18).Select(i => Passing($"Fine{i}"))
+            ],
+            sha: $"sha-of-run-{ordinal}"))
+    ];
+
+    [Fact]
+    public void ClustersAreOrderedWidestFirstAndTiesBreakStably()
+    {
+        TestSession[] sessions =
+        [
+            .. Enumerable.Range(0, 4).Select(ordinal => TestSessionFactory.Session(
+                ordinal,
+                [.. ClusterFixtureTests.Select(Passing)])),
+            TestSessionFactory.Session(
+                4,
+                [
+                    SharedFailure("Alpha"),
+                    SharedFailure("Beta"),
+                    SharedFailure("Gamma"),
+                    OtherSharedFailure("Delta"),
+                    OtherSharedFailure("Epsilon"),
+                    OtherSharedFailure("Zeta")
+                ])
+        ];
+
+        // Both clusters have three members, so only the hash separates them — and it has to separate
+        // them the same way on every run.
+        List<FindingCandidate> first = Analyze(sessions);
+        List<FindingCandidate> second = Analyze(sessions);
+
+        Assert.Equal(2, first.Count(c => c.Kind == FindingKind.SharedFailure));
+        Assert.Equal(
+            first.Select(c => c.Subject.SortKey),
+            second.Select(c => c.Subject.SortKey));
+    }
+
+    [Fact]
+    public void TheSameWindowProducesTheSameCandidatesInTheSameOrder()
+    {
+        TestSession[] sessions = Runs(total: 12, failing: 5);
+
+        Assert.Equal(Serialize(Analyze(sessions)), Serialize(Analyze(sessions)));
+    }
+
+    /// <summary>
+    /// Renders candidates the way the report would, so the comparison is over published bytes.
+    /// </summary>
+    /// <remarks>
+    /// Comparing the records directly would compare their evidence lists by reference and pass
+    /// whatever the contents were.
+    /// </remarks>
+    private static string Serialize(List<FindingCandidate> candidates) =>
+        string.Join(
+            "\n",
+            candidates.Select(c => string.Concat(
+                c.Kind.ToString(),
+                c.Subject.SortKey,
+                JsonSerializer.Serialize(c.Evidence, c.Evidence.GetType(), ReportJsonOptions.Default))));
+
+    [Fact]
+    public void TwoIdenticallyBuiltWindowsProduceByteIdenticalJson()
+    {
+        // Rebuilt from scratch rather than reused, so anything leaking in from allocation order or
+        // dictionary enumeration shows up here and not only in the run-twice case.
+        Assert.Equal(Serialize(MixedFixture()), Serialize(MixedFixture()));
+    }
+
+    [Fact]
+    public void TheReportingFloorKeepsAThinWindowOutOfTheFindings()
+    {
+        // Four sessions is below the floor. The command still renders a report; it simply has
+        // nothing it is willing to claim.
+        AnalysisResult result = Run(TestSessionFactory.Context(Runs(total: 4, failing: 4)));
+
+        Assert.Empty(result.Findings);
+        Assert.Equal(1, result.ExcludedLowEvidence);
+    }
+
+    [Fact]
+    public void AFindingSurvivesTheFloorOnceThereIsEnoughOfIt()
+    {
+        AnalysisResult result = Run(TestSessionFactory.Context(Runs(total: 5, failing: 5)));
+
+        Finding finding = Assert.Single(result.Findings);
+
+        Assert.Equal(FindingKind.AlwaysFailing, finding.Kind);
+        Assert.Equal(EvidenceLevel.Sparse, finding.EvidenceLevel);
+    }
+
+    [Fact]
+    public void EnvironmentalSessionsAreCountedInTheSummary()
+    {
+        List<TestExecution> outage =
+        [
+            .. Enumerable.Range(0, 12).Select(i => Failure($"Broken{i}")),
+            .. Enumerable.Range(0, 18).Select(i => Passing($"Fine{i}"))
+        ];
+
+        AnalysisContext context = TestSessionFactory.Context(
+            [
+                .. Enumerable.Range(0, 5).Select(ordinal => TestSessionFactory.Session(
+                    ordinal,
+                    [.. Enumerable.Range(0, 30).Select(i => Passing($"Test{i}"))])),
+                TestSessionFactory.Session(5, outage)
+            ]);
+
+        ReportEnvelope envelope = EnvelopeBuilder.Build(
+            context, Run(context), incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null, scope: TestSessionFactory.Scope(context));
+
+        // Without this line the discounting silently changes every rate in the report, with nothing
+        // on screen to explain it.
+        Assert.Equal(1, envelope.Summary.EnvironmentalSessions);
+    }
+
+    /// <summary>
+    /// Under <c>--id</c> the envelope is the full report's with one finding in it.
+    /// </summary>
+    /// <remarks>
+    /// Everything that describes the run is built exactly as the full report builds it: a summary
+    /// that said one finding because one was selected would contradict the report printed a moment
+    /// earlier from the same store.
+    /// </remarks>
+    [Fact]
+    public void ASelectedEnvelopeIsTheFullOneWithOneFinding()
+    {
+        AnalysisContext context = TestSessionFactory.Context(MixedFixture());
+        AnalysisResult result = Run(context);
+
+        ReportEnvelope full = EnvelopeBuilder.Build(
+            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null, scope: TestSessionFactory.Scope(context));
+
+        Assert.True(full.Findings.Count >= 2);
+        FindingDto second = full.Findings[1];
+
+        ReportEnvelope selected = EnvelopeBuilder.Build(
+            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null, scope: TestSessionFactory.Scope(context),
+            id: second.Id.ToUpperInvariant());
+
+        Assert.Equal(Json(second), Json(Assert.Single(selected.Findings)));
+        Assert.Equal(Json(full.Summary), Json(selected.Summary));
+        Assert.Equal(new TruncationDto(1, full.Findings.Count, "xping report --all --assembly MyApp.Tests"), selected.Truncated);
+
+        SelectionDto dto = Assert.IsType<SelectionDto>(selected.Selection);
+        Assert.Equal(second.Id, dto.Id);
+        Assert.True(dto.Reported);
+        Assert.Equal(second.Kind, dto.Kind);
+        Assert.Equal(2, dto.Row);
+    }
+
+    [Fact]
+    public void AnUnreportedSelectionShowsNoFinding()
+    {
+        AnalysisContext context = TestSessionFactory.Context(MixedFixture());
+        AnalysisResult result = Run(context);
+
+        ReportEnvelope selected = EnvelopeBuilder.Build(
+            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null, scope: TestSessionFactory.Scope(context),
+            id: FindingId.Compute(FindingKind.Flaky, "fp-Gone"));
+
+        Assert.Empty(selected.Findings);
+        Assert.Equal(0, selected.Truncated.Shown);
+        Assert.Equal(result.Findings.Count, selected.Summary.Findings);
+
+        SelectionDto dto = Assert.IsType<SelectionDto>(selected.Selection);
+        Assert.False(dto.Reported);
+        Assert.Null(dto.Kind);
+        Assert.Null(dto.Row);
+        Assert.Empty(dto.SameSubject);
+    }
+
+    /// <summary>
+    /// Every command the envelope prints repeats the report's scope, so running it lands on this
+    /// report again.
+    /// </summary>
+    /// <remarks>
+    /// The drill-down names the assembly always, and the finding's own id — the alternative's,
+    /// across a handover. The full-report command repeats only what the caller typed.
+    /// </remarks>
+    [Fact]
+    public void EveryPrintedCommandRepeatsTheReportsScope()
+    {
+        AnalysisContext context = TestSessionFactory.Context(MixedFixture());
+        AnalysisResult result = Run(context);
+
+        ReportEnvelope typed = EnvelopeBuilder.Build(
+            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: 1, latestRun: null,
+            scope: new ReportScope(
+                "My App.Tests", WindowResolution.Runs, 7, ShellDialect.Posix, Runs: 7, Directory: "../svc"));
+
+        Assert.NotEmpty(typed.Findings);
+        Assert.All(typed.Findings, finding => Assert.Equal(
+            $"xping report --id {finding.Id} --assembly 'My App.Tests' --runs 7 --directory ../svc",
+            finding.DrillDown));
+        Assert.Equal("xping report --all --assembly 'My App.Tests' --runs 7 --directory ../svc", typed.Truncated.Command);
+
+        ReportEnvelope named = EnvelopeBuilder.Build(
+            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: 1, latestRun: null,
+            scope: new ReportScope(
+                "MyApp.Tests", WindowResolution.SinceDate, 20, ShellDialect.Posix, Since: "2026-08-01"));
+
+        Assert.Equal("xping report --all --assembly MyApp.Tests --since 2026-08-01", named.Truncated.Command);
+    }
+
+    /// <summary>
+    /// With no scope given and no revision to take an assembly from, a drill-down names no assembly
+    /// rather than failing.
+    /// </summary>
+    [Fact]
+    public void ADrillDownWithoutARevisionNamesNoAssembly()
+    {
+        AnalysisContext scoped = TestSessionFactory.Context(MixedFixture());
+        var context = new AnalysisContext(scoped.Window, revision: null);
+        AnalysisResult result = Run(context);
+
+        ReportEnvelope envelope = EnvelopeBuilder.Build(
+            context, result, incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: 1, latestRun: null, scope: TestSessionFactory.Scope(context));
+
+        Assert.NotEmpty(envelope.Findings);
+        Assert.All(envelope.Findings, finding =>
+            Assert.Equal($"xping report --id {finding.Id}", finding.DrillDown));
+    }
+
+    private static string Json<T>(T value) => JsonSerializer.Serialize(value, ReportJsonOptions.Default);
+
+    private static AnalysisResult Run(AnalysisContext context) =>
+        new FindingCoordinator([new FailureModeProvider()])
+            .Run(context, kinds: null, TextWriter.Null);
+
+    private static string Serialize(TestSession[] sessions)
+    {
+        AnalysisContext context = TestSessionFactory.Context(sessions);
+
+        ReportEnvelope envelope = EnvelopeBuilder.Build(
+            context, Run(context), incompleteSessions: 0, unreadableSessions: 0, skewedSessions: 0, top: null, latestRun: null, scope: TestSessionFactory.Scope(context));
+
+        return JsonSerializer.Serialize(envelope, ReportJsonOptions.Default);
+    }
+
+    /// <summary>
+    /// A window carrying one of everything: a cluster, a broken test and an unstable one.
+    /// </summary>
+    private static TestSession[] MixedFixture() =>
+        [
+            .. Enumerable.Range(0, 6).Select(ordinal => TestSessionFactory.Session(
+                ordinal,
+                [
+                    Passing("Alpha"),
+                    Passing("Beta"),
+                    Passing("Gamma"),
+                    Failure("Broken"),
+                    ordinal % 2 == 0 ? Passing("Unstable") : Failure("Unstable", "sometimes")
+                ],
+                sha: $"a3f9c2e{ordinal}")),
+            TestSessionFactory.Session(
+                6,
+                [
+                    SharedFailure("Alpha"),
+                    SharedFailure("Beta"),
+                    SharedFailure("Gamma"),
+                    Failure("Broken"),
+                    Failure("Unstable", "sometimes")
+                ],
+                sha: "a3f9c2e6")
+        ];
+
+    [Fact]
+    public void ATestWithNoFingerprintIsSkippedRatherThanCrashingTheProvider()
+    {
+        // Defensive: the index drops fingerprint-less executions, and the provider must not then
+        // find a candidate it cannot name.
+        TestSession[] sessions = Runs(total: 6, failing: 6);
+
+        Assert.NotEmpty(Analyze(sessions));
+    }
+}

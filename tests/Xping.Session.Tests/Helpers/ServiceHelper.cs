@@ -1,0 +1,289 @@
+/*
+ * © 2026 Xping.io. All Rights Reserved.
+ * License: [MIT]
+ */
+
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Moq;
+using Xping.Sdk.Core.Configuration;
+using Xping.Sdk.Core.Extensions;
+using Xping.Sdk.Core.Models.Environments;
+using Xping.Sdk.Core.Services.Collector;
+using Xping.Sdk.Core.Services.Environment;
+using Xping.Sdk.Core.Services.Upload;
+
+namespace Xping.Sdk.Core.Tests.Helpers;
+
+/// <summary>
+/// Shared factory helpers for building DI containers and host instances in tests.
+/// </summary>
+internal static class ServiceHelper
+{
+    /// <summary>
+    /// Creates a <see cref="ServiceCollection"/> pre-configured with a valid
+    /// <see cref="XpingConfiguration"/> and the collector services registered.
+    /// </summary>
+    public static ServiceCollection CreateCollectorServices(Action<XpingConfiguration>? configure = null)
+    {
+        var services = new ServiceCollection();
+        services.Configure<XpingConfiguration>(o =>
+        {
+            o.ApiKey = "test-key";
+            o.ProjectId = "test-project";
+            o.BatchSize = 100;
+            o.Enabled = true;
+            configure?.Invoke(o);
+        });
+        services.AddXpingCollectors();
+        return services;
+    }
+
+    /// <summary>
+    /// Builds an <see cref="ITestExecutionCollector"/> from DI with the supplied configuration override.
+    /// </summary>
+    public static ITestExecutionCollector BuildCollector(Action<XpingConfiguration>? configure = null)
+    {
+        var provider = CreateCollectorServices(configure).BuildServiceProvider();
+        return provider.GetRequiredService<ITestExecutionCollector>();
+    }
+
+    /// <summary>
+    /// Builds an <see cref="IExecutionTracker"/> from DI.
+    /// </summary>
+    public static IExecutionTracker BuildTracker()
+    {
+        var provider = CreateCollectorServices().BuildServiceProvider();
+        return provider.GetRequiredService<IExecutionTracker>();
+    }
+
+    /// <summary>
+    /// Builds an <see cref="IHost"/> wired with mock uploader and environment detector.
+    /// The flush interval is set to zero by default to suppress the background timer.
+    /// </summary>
+    public static IHost BuildOrchestratorHost(
+        Mock<IXpingUploader> uploaderMock,
+        Mock<IEnvironmentDetector> envDetectorMock,
+        Action<XpingConfiguration>? configure = null,
+        Action<IServiceCollection>? configureServices = null)
+    {
+        return new HostBuilder()
+            .ConfigureServices(services =>
+            {
+                services.Configure<XpingConfiguration>(o =>
+                {
+                    o.ApiKey = "test-key";
+                    o.ProjectId = "test-project";
+                    o.BatchSize = 100;
+                    o.Enabled = true;
+                    o.FlushInterval = TimeSpan.Zero; // disable background timer by default
+                    configure?.Invoke(o);
+                });
+                services.AddXpingCollectors();
+                services.AddXpingInfrastructure();
+                services.AddXpingPullRequest();
+                services.AddXpingStatistics();
+                services.AddSingleton(uploaderMock.Object);
+                services.AddSingleton(envDetectorMock.Object);
+                configureServices?.Invoke(services);
+            })
+            .Build();
+    }
+
+    /// <summary>
+    /// Configures standard mock returns: uploader returns success with execution count
+    /// based on the number of executions in the session; environment detector returns
+    /// an empty <see cref="EnvironmentInfo"/>.
+    /// </summary>
+    public static void SetupDefaultMocks(
+        Mock<IXpingUploader> uploaderMock,
+        Mock<IEnvironmentDetector> envDetectorMock)
+    {
+        envDetectorMock
+            .Setup(e => e.BuildEnvironmentInfoAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EnvironmentInfo());
+
+        // Return success with ExecutionCount == session.Executions.Count so the
+        // finalization drain loop terminates correctly.
+        uploaderMock
+            .Setup(u => u.UploadAsync(It.IsAny<Xping.Sdk.Core.Models.TestSession>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((Xping.Sdk.Core.Models.TestSession s, CancellationToken _) => new UploadResult
+            {
+                Success = true,
+                TotalRecordsCount = s.Executions.Count
+            });
+    }
+
+    /// <summary>
+    /// Builds an <see cref="IHost"/> wired with mock uploader and environment detector,
+    /// but with deliberately invalid configuration so that
+    /// <see cref="Microsoft.Extensions.Options.OptionsValidationException"/> is thrown when
+    /// <c>IOptions&lt;XpingConfiguration&gt;.Value</c> is accessed during orchestrator construction.
+    /// </summary>
+    /// <remarks>
+    /// Invalidity is expressed as a malformed <c>ApiEndpoint</c> rather than missing credentials.
+    /// Missing credentials are valid under the local-only contract — they select
+    /// <see cref="XpingMode.LocalOnly"/> instead of failing — so they can no longer stand in for
+    /// "broken configuration".
+    /// </remarks>
+    public static IHost BuildInvalidConfigHost()
+    {
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        SetupDefaultMocks(uploaderMock, envDetectorMock);
+
+        return new HostBuilder()
+            .ConfigureServices(services =>
+            {
+                services.Configure<XpingConfiguration>(o =>
+                {
+                    o.ApiKey = "test-key";
+                    o.ProjectId = "test-project";
+                    o.ApiEndpoint = "not-a-valid-url";
+                    o.Enabled = true;
+                    o.FlushInterval = TimeSpan.Zero;
+                });
+
+                // Mirror the real pipeline: the mode-aware Validate(), so OptionsValidationException
+                // fires on .Value access.
+                services.AddOptions<XpingConfiguration>()
+                    .Validate(config => config.Validate().Count == 0);
+
+                services.AddXpingCollectors();
+                services.AddXpingInfrastructure();
+                services.AddXpingPullRequest();
+                services.AddXpingStatistics();
+                services.AddSingleton(uploaderMock.Object);
+                services.AddSingleton(envDetectorMock.Object);
+            })
+            .Build();
+    }
+
+    /// <summary>
+    /// Builds an <see cref="IHost"/> with deliberately invalid configuration and
+    /// <c>Xping:StrictMode</c> set to <c>true</c> in <see cref="IConfiguration"/> so that
+    /// <see cref="Xping.Sdk.Core.Exceptions.XpingConfigurationException"/> is thrown during
+    /// orchestrator construction.
+    /// </summary>
+    public static IHost BuildInvalidConfigHostWithStrictMode()
+    {
+        var uploaderMock = new Mock<IXpingUploader>();
+        var envDetectorMock = new Mock<IEnvironmentDetector>();
+        SetupDefaultMocks(uploaderMock, envDetectorMock);
+
+        return new HostBuilder()
+            .ConfigureAppConfiguration((_, configBuilder) =>
+            {
+                // Inject Xping:StrictMode=true so IsStrictModeEnabled() picks it up via IConfiguration.
+                var inMemory = new Dictionary<string, string?> { ["Xping:StrictMode"] = "true" };
+                configBuilder.AddInMemoryCollection(inMemory);
+            })
+            .ConfigureServices(services =>
+            {
+                // Missing credentials, plus StrictMode on the options instance itself. The real
+                // pipeline binds the "Xping" section, so Xping:StrictMode=true would land on this
+                // property; setting it here keeps the helper faithful to that behavior. Strict mode
+                // forces Cloud, which makes the absent credentials a hard error.
+                services.Configure<XpingConfiguration>(o =>
+                {
+                    o.ApiKey = null;
+                    o.ProjectId = null;
+                    o.Enabled = true;
+                    o.StrictMode = true;
+                    o.FlushInterval = TimeSpan.Zero;
+                });
+
+                services.AddOptions<XpingConfiguration>()
+                    .Validate(config => config.Validate().Count == 0);
+
+                services.AddXpingCollectors();
+                services.AddXpingInfrastructure();
+                services.AddXpingPullRequest();
+                services.AddXpingStatistics();
+                services.AddSingleton(uploaderMock.Object);
+                services.AddSingleton(envDetectorMock.Object);
+            })
+            .Build();
+    }
+
+    /// <summary>
+    /// Builds an <see cref="IHost"/> with valid configuration, strict mode enabled in the options, and a
+    /// pre-configured mock uploader. Use this to test network-error behavior in strict mode.
+    /// </summary>
+    public static IHost BuildOrchestratorHostWithStrictMode(
+        Mock<IXpingUploader> uploaderMock,
+        Mock<IEnvironmentDetector> envDetectorMock,
+        Action<XpingConfiguration>? configure = null)
+    {
+        return new HostBuilder()
+            .ConfigureServices(services =>
+            {
+                services.Configure<XpingConfiguration>(o =>
+                {
+                    o.ApiKey = "test-key";
+                    o.ProjectId = "test-project";
+                    o.BatchSize = 100;
+                    o.Enabled = true;
+                    o.FlushInterval = TimeSpan.Zero;
+                    o.StrictMode = true;
+                    configure?.Invoke(o);
+                });
+                services.AddXpingCollectors();
+                services.AddXpingInfrastructure();
+                services.AddXpingPullRequest();
+                services.AddXpingStatistics();
+                services.AddSingleton(uploaderMock.Object);
+                services.AddSingleton(envDetectorMock.Object);
+            })
+            .Build();
+    }
+
+    /// <summary>
+    /// Builds an <see cref="IHost"/> through the real <c>AddXping(XpingConfiguration)</c> registration,
+    /// with the uploader and environment detector replaced by mocks. Unlike the hand-wired helpers above,
+    /// the options here are exactly what a suite calling <c>XpingContext.Initialize(config)</c> gets,
+    /// <c>XPING_*</c> overrides included.
+    /// </summary>
+    /// <param name="configuration">The instance handed to <c>AddXping</c>.</param>
+    /// <param name="uploaderMock">Replaces the registered uploader.</param>
+    /// <param name="envDetectorMock">Replaces the registered environment detector.</param>
+    /// <param name="appConfiguration">Keys added to the host's <see cref="IConfiguration"/>.</param>
+    /// <param name="configureServices">Further replacements, applied last.</param>
+    public static IHost BuildRegisteredOrchestratorHost(
+        XpingConfiguration configuration,
+        Mock<IXpingUploader> uploaderMock,
+        Mock<IEnvironmentDetector> envDetectorMock,
+        IDictionary<string, string?>? appConfiguration = null,
+        Action<IServiceCollection>? configureServices = null)
+    {
+        return new HostBuilder()
+            .ConfigureAppConfiguration((_, configBuilder) =>
+            {
+                if (appConfiguration != null)
+                    configBuilder.AddInMemoryCollection(appConfiguration);
+            })
+            .ConfigureServices(services =>
+            {
+                services.AddXping(configuration);
+                services.AddSingleton(uploaderMock.Object);
+                services.AddSingleton(envDetectorMock.Object);
+                configureServices?.Invoke(services);
+            })
+            .Build();
+    }
+
+    /// <summary>
+    /// A valid Cloud configuration for <see cref="BuildRegisteredOrchestratorHost"/>, with local history
+    /// kept in <paramref name="storePath"/>. The real registration rejects a zero flush interval, so the
+    /// background flush is pushed out of any test's reach instead.
+    /// </summary>
+    public static XpingConfiguration CloudConfiguration(string storePath, bool strictMode) => new()
+    {
+        ApiKey = "test-key",
+        ProjectId = "test-project",
+        FlushInterval = TimeSpan.FromHours(1),
+        StrictMode = strictMode,
+        LocalStorePath = storePath,
+    };
+}

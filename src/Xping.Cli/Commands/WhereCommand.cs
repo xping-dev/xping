@@ -1,0 +1,125 @@
+/*
+ * © 2026 Xping.io. All Rights Reserved.
+ * License: [MIT]
+ */
+
+using System.Globalization;
+using Xping.Cli.Hosting;
+using Xping.Cli.Report.Rendering;
+using Xping.Cli.Reporting;
+using Xping.Cli.Services;
+using Xping.Sdk.Core.Models;
+using Xping.Sdk.Core.Services.Environment;
+using Xping.Sdk.Core.Services.LocalStore;
+
+namespace Xping.Cli.Commands;
+
+/// <summary>
+/// Prints where the local store lives and what it holds.
+/// </summary>
+/// <remarks>
+/// The store's location is discovered by walking up for a repository root, so "where is my data"
+/// is not answerable by inspection. This makes it answerable, and doubles as the first thing to run
+/// when a report is unexpectedly empty.
+/// </remarks>
+internal sealed class WhereCommand(ILocalSessionStoreFactory storeFactory, ConsoleIO io, IEnvironmentVariableProvider environment)
+{
+    public int Run(string? directory)
+    {
+        TextWriter output = io.Output;
+
+        ILocalSessionStore store = storeFactory.Create(
+            startDirectory: directory ?? Directory.GetCurrentDirectory());
+
+        if (!store.IsAvailable || store.StorePath == null)
+        {
+            output.WriteLine("No Xping local store could be resolved from this directory.");
+            return 1;
+        }
+
+        // What the report would print a recorded name with on this stream (D7). A path or an assembly
+        // name is whatever the file system and the test project were given.
+        ReportGlyphs glyphs = OutputCapabilities.Resolve(
+            forceAscii: false, noColor: true, redirected: !io.IsTerminal, environment.GetVariable).Glyphs;
+
+        output.WriteLine(TerminalText.Printable(store.StorePath, glyphs.Charset));
+
+        string? sessionsDirectory = store.SessionsPath;
+        if (sessionsDirectory == null || !Directory.Exists(sessionsDirectory))
+        {
+            output.WriteLine("  (no runs recorded yet)");
+            return 0;
+        }
+
+        var sessions = new DirectoryInfo(sessionsDirectory);
+        var files = sessions.GetFiles("session-*.json.gz");
+
+        // Temp files left by interrupted writes are not runs, but retention counts them toward the
+        // size limit, so the size shown here does too.
+        long bytes = files.Sum(f => f.Length) + sessions.GetFiles("session-*.json.gz.tmp").Sum(f => f.Length);
+
+        output.WriteLine(string.Format(
+            CultureInfo.InvariantCulture,
+            "  {0} {1} {2} {3} on disk",
+            files.Length,
+            files.Length == 1 ? "run" : "runs",
+            glyphs.Separator,
+            FormatSize(bytes)));
+
+        // The summary covers every file and loads no session, so the listing below always accounts
+        // for the whole store however many runs it holds.
+        LocalStoreSummary summary = store.Summarize();
+
+        // The SDK no longer writes a run that named no assembly, but a store can still hold some
+        // from before it stopped, or a file too damaged to read. They fit no listing below, so
+        // without this line the run count above and the list would disagree until retention evicts
+        // them.
+        int unattributed = summary.UnattributedRuns;
+        if (unattributed > 0)
+        {
+            output.WriteLine(string.Format(
+                CultureInfo.InvariantCulture,
+                "  {0} {1} no assembly and {2} not shown",
+                unattributed,
+                unattributed == 1 ? "run names" : "runs name",
+                unattributed == 1 ? "is" : "are"));
+        }
+
+        // A run is listed under every assembly it executed, so the run counts below can add up to
+        // more than the file count above. That is the honest reading: one `dotnet test` across a
+        // solution is one run of each test project it covered, and each of them has that much
+        // history. Collapsing it to a single arbitrary assembly is what this listing exists to
+        // stop the reader believing.
+        var byAssembly = summary.Assemblies
+            .OrderByDescending(a => a.Runs)
+            .ThenBy(a => a.Name, StringComparer.Ordinal);
+
+        foreach (LocalStoreAssembly assembly in byAssembly)
+        {
+            output.WriteLine(string.Format(
+                CultureInfo.InvariantCulture,
+                "  {0,-40} {1,4} {2}  last {3:yyyy-MM-dd HH:mm} UTC",
+                Truncate(TerminalText.Printable(assembly.Name, glyphs.Charset), 40),
+                assembly.Runs,
+                assembly.Runs == 1 ? "run " : "runs",
+                assembly.LastStartedAt));
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Formats a byte count for a person reading a diagnostic.
+    /// </summary>
+    /// <remarks>
+    /// Switches to megabytes past a thousand kilobytes. A whole session is a large document, so a
+    /// populated store reaches four-digit kilobyte figures that nobody reads at a glance.
+    /// </remarks>
+    private static string FormatSize(long bytes) =>
+        bytes >= 1024L * 1024
+            ? string.Format(CultureInfo.InvariantCulture, "{0:0.0} MB", bytes / (1024.0 * 1024.0))
+            : string.Format(CultureInfo.InvariantCulture, "{0:0.0} KB", bytes / 1024.0);
+
+    private static string Truncate(string value, int max) =>
+        value.Length <= max ? value : TerminalText.Head(value, max - 1) + "~";
+}

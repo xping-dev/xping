@@ -1,0 +1,95 @@
+/*
+ * © 2026 Xping.io. All Rights Reserved.
+ * License: [MIT]
+ */
+
+using Xping.Cli.Report.Model;
+
+namespace Xping.Cli.Commands;
+
+/// <summary>
+/// The output format for <c>xping report</c>.
+/// </summary>
+internal enum ReportFormat
+{
+    /// <summary>A rendered block for a person reading a terminal.</summary>
+    Text,
+
+    /// <summary>The versioned envelope for a script or an agent.</summary>
+    Json,
+
+    /// <summary>One line, for a chat message, a commit trailer or a CI step title.</summary>
+    Summary
+}
+
+/// <summary>
+/// Options for <c>xping report</c>.
+/// </summary>
+internal sealed class ReportOptions
+{
+    /// <summary>
+    /// Gets or sets the number of recent runs to analyse, or <see langword="null"/> for the default
+    /// window.
+    /// </summary>
+    public int? Runs { get; set; }
+
+    /// <summary>
+    /// Gets or sets the commit or date to analyse from, or <see langword="null"/> for the default
+    /// window.
+    /// </summary>
+    public string? Since { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of findings to show, or <see langword="null"/> to show all of them.
+    /// </summary>
+    public int? Top { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether <see cref="Top"/> came from <c>--top</c> or
+    /// <c>--all</c> rather than the default.
+    /// </summary>
+    public bool TopGiven { get; set; }
+
+    /// <summary>Gets or sets the kinds to report, or empty for all of them.</summary>
+    public IReadOnlyList<FindingKind> Kinds { get; set; } = [];
+
+    /// <summary>Gets or sets the test assembly to restrict to, or <see langword="null"/> for the store's only one, or the overview when it holds several.</summary>
+    public string? Assembly { get; set; }
+
+    /// <summary>
+    /// Gets or sets the finding to show in detail, or <see langword="null"/> for the full report.
+    /// </summary>
+    public string? Id { get; set; }
+
+    /// <summary>
+    /// Gets or sets the name or fingerprint of the test to show the history of, or
+    /// <see langword="null"/> for the full report.
+    /// </summary>
+    public string? Test { get; set; }
+
+    /// <summary>Gets or sets the directory to resolve the store from. Defaults to the working directory.</summary>
+    public string? Directory { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Cloud project key to read the report's tests from (<c>--project</c>),
+    /// overriding <c>XPING_PROJECTID</c> and the key recorded with the sessions.
+    /// </summary>
+    public string? Project { get; set; }
+
+    /// <summary>Gets or sets the output format.</summary>
+    public ReportFormat Format { get; set; } = ReportFormat.Text;
+
+    /// <summary>
+    /// Gets or sets the least severity that should fail the command, or <see langword="null"/> to
+    /// always succeed when a report was produced.
+    /// </summary>
+    public Severity? FailOn { get; set; }
+
+    /// <summary>Gets or sets a value indicating whether to force the ASCII glyph set.</summary>
+    public bool Ascii { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether to suppress ANSI colour regardless of the terminal.
+    /// </summary>
+    public bool NoColor { get; set; }
+}
