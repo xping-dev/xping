@@ -1,8 +1,5 @@
-/*
- * © 2024 Xping.io. All Rights Reserved.
- *
- * This file is part of the Xping Solution.
- */
+// SPDX-License-Identifier: MIT
+// Copyright (c) Xping
 
 using System.Runtime.CompilerServices;
 

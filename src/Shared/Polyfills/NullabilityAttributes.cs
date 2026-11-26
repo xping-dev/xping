@@ -1,7 +1,5 @@
-/*
- * © 2026 Xping.io. All Rights Reserved.
- * License: [MIT]
- */
+// SPDX-License-Identifier: MIT
+// Copyright (c) Xping
 
 #if !NETCOREAPP3_0_OR_GREATER && !NETSTANDARD2_1_OR_GREATER
 

@@ -1,8 +1,5 @@
-/*
- * © 2026 Xping.io. All Rights Reserved.
- *
- * This file is part of the Xping Solution.
- */
+// SPDX-License-Identifier: MIT
+// Copyright (c) Xping
 
 #if !NET6_0_OR_GREATER
 
