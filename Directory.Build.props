@@ -47,6 +47,8 @@
   <!-- Test projects: everything under tests/. -->
   <PropertyGroup Condition="$([MSBuild]::MakeRelative('$(MSBuildThisFileDirectory)', '$(MSBuildProjectDirectory)').Replace('\', '/').StartsWith('tests/'))">
     <IsTestProject>true</IsTestProject>
+    <!-- xUnit v3 test projects are executables run by Microsoft.Testing.Platform. -->
+    <OutputType>Exe</OutputType>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <!-- CA1515: xUnit needs public test classes. CA1707: underscores in test names. CA2007: no ConfigureAwait in tests. -->
     <NoWarn>$(NoWarn);CA1515;CA1707;CA2007</NoWarn>

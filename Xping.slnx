@@ -13,4 +13,19 @@
     <Project Path="src/Xping.Reporters/Xping.Reporters.csproj" />
     <Project Path="src/Xping.Session/Xping.Session.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Xping.Analyzers.CSharp.Tests/Xping.Analyzers.CSharp.Tests.csproj" />
+    <Project Path="tests/Xping.Analyzers.TreeSitter.Tests/Xping.Analyzers.TreeSitter.Tests.csproj" />
+    <Project Path="tests/Xping.Cli.IntegrationTests/Xping.Cli.IntegrationTests.csproj" />
+    <Project Path="tests/Xping.Cli.Tests/Xping.Cli.Tests.csproj" />
+    <Project Path="tests/Xping.Core.Tests/Xping.Core.Tests.csproj" />
+    <Project Path="tests/Xping.Evidence.Tests/Xping.Evidence.Tests.csproj" />
+    <Project Path="tests/Xping.History.Tests/Xping.History.Tests.csproj" />
+    <Project Path="tests/Xping.Providers.Abstractions.Tests/Xping.Providers.Abstractions.Tests.csproj" />
+    <Project Path="tests/Xping.Providers.AzureDevOps.Tests/Xping.Providers.AzureDevOps.Tests.csproj" />
+    <Project Path="tests/Xping.Providers.GitHub.Tests/Xping.Providers.GitHub.Tests.csproj" />
+    <Project Path="tests/Xping.Providers.GitLab.Tests/Xping.Providers.GitLab.Tests.csproj" />
+    <Project Path="tests/Xping.Reporters.Tests/Xping.Reporters.Tests.csproj" />
+    <Project Path="tests/Xping.Session.Tests/Xping.Session.Tests.csproj" />
+  </Folder>
 </Solution>

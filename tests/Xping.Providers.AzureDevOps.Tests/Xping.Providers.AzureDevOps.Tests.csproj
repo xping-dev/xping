@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Xping.Providers.AzureDevOps\Xping.Providers.AzureDevOps.csproj" />
+  </ItemGroup>
+
+</Project>
