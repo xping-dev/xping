@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>GitHub Actions provider for Xping.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Xping.Providers.Abstractions\Xping.Providers.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

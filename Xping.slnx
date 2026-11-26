@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Xping.Analyzers.CSharp/Xping.Analyzers.CSharp.csproj" />
+    <Project Path="src/Xping.Analyzers.TreeSitter/Xping.Analyzers.TreeSitter.csproj" />
+    <Project Path="src/Xping.Cli/Xping.Cli.csproj" />
+    <Project Path="src/Xping.Core/Xping.Core.csproj" />
+    <Project Path="src/Xping.Evidence/Xping.Evidence.csproj" />
+    <Project Path="src/Xping.History/Xping.History.csproj" />
+    <Project Path="src/Xping.Providers.Abstractions/Xping.Providers.Abstractions.csproj" />
+    <Project Path="src/Xping.Providers.AzureDevOps/Xping.Providers.AzureDevOps.csproj" />
+    <Project Path="src/Xping.Providers.GitHub/Xping.Providers.GitHub.csproj" />
+    <Project Path="src/Xping.Providers.GitLab/Xping.Providers.GitLab.csproj" />
+    <Project Path="src/Xping.Reporters/Xping.Reporters.csproj" />
+    <Project Path="src/Xping.Session/Xping.Session.csproj" />
+  </Folder>
+</Solution>
