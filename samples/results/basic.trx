@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sample TRX report with the same three tests as basic.junit.xml. Used by Xping.Evidence tests. -->
+<TestRun id="5b0c1d2e-0000-4000-8000-000000000001" name="sample@runner-1 2026-11-26 10:00:00" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-11-26T10:00:00.000Z" start="2026-11-26T10:00:00.000Z" finish="2026-11-26T10:00:00.412Z" />
+  <Results>
+    <UnitTestResult executionId="5b0c1d2e-0000-4000-8000-0000000000a1" testId="5b0c1d2e-0000-4000-8000-0000000000b1" testName="ProcessesBatch_Under250ms" computerName="runner-1" duration="00:00:00.2360000" startTime="2026-11-26T10:00:00.000Z" endTime="2026-11-26T10:00:00.236Z" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <UnitTestResult executionId="5b0c1d2e-0000-4000-8000-0000000000a2" testId="5b0c1d2e-0000-4000-8000-0000000000b2" testName="RejectsEmptyOrder" computerName="runner-1" duration="00:00:00.1710000" startTime="2026-11-26T10:00:00.236Z" endTime="2026-11-26T10:00:00.407Z" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Failed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d">
+      <Output>
+        <ErrorInfo>
+          <Message>Assert.Equal() Failure: Values differ</Message>
+          <StackTrace>at Sample.Tests.OrderServiceTests.RejectsEmptyOrder() in OrderServiceTests.cs:line 42</StackTrace>
+        </ErrorInfo>
+      </Output>
+    </UnitTestResult>
+    <UnitTestResult executionId="5b0c1d2e-0000-4000-8000-0000000000a3" testId="5b0c1d2e-0000-4000-8000-0000000000b3" testName="ExportsCsv" computerName="runner-1" duration="00:00:00" startTime="2026-11-26T10:00:00.407Z" endTime="2026-11-26T10:00:00.407Z" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="NotExecuted" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d">
+      <Output>
+        <StdOut>Skipped: flaky</StdOut>
+      </Output>
+    </UnitTestResult>
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="ProcessesBatch_Under250ms" storage="sample.tests.dll" id="5b0c1d2e-0000-4000-8000-0000000000b1">
+      <Execution id="5b0c1d2e-0000-4000-8000-0000000000a1" />
+      <TestMethod codeBase="Sample.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcoreapp" className="Sample.Tests.OrderServiceTests" name="ProcessesBatch_Under250ms" />
+    </UnitTest>
+    <UnitTest name="RejectsEmptyOrder" storage="sample.tests.dll" id="5b0c1d2e-0000-4000-8000-0000000000b2">
+      <Execution id="5b0c1d2e-0000-4000-8000-0000000000a2" />
+      <TestMethod codeBase="Sample.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcoreapp" className="Sample.Tests.OrderServiceTests" name="RejectsEmptyOrder" />
+    </UnitTest>
+    <UnitTest name="ExportsCsv" storage="sample.tests.dll" id="5b0c1d2e-0000-4000-8000-0000000000b3">
+      <Execution id="5b0c1d2e-0000-4000-8000-0000000000a3" />
+      <TestMethod codeBase="Sample.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner3/netcoreapp" className="Sample.Tests.OrderServiceTests" name="ExportsCsv" />
+    </UnitTest>
+  </TestDefinitions>
+  <ResultSummary outcome="Failed">
+    <Counters total="3" executed="2" passed="1" failed="1" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="1" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+  </ResultSummary>
+</TestRun>

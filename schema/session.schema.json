@@ -1,0 +1,540 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:xping:schema:session:v1",
+  "title": "Xping session",
+  "description": "One test session: the executions of one test run, with identity, outcome, timing and environment. Canonical data model of Xping: JUnit/TRX importers convert into it, history stores it, rules read it. DRAFT v1: may change until the first release that writes it. Readers must ignore unknown properties. Files without schemaVersion are the pre-v1 format written by Xping.Sdk.Core 1.0.0-rc.x and are read through the legacy importer.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "producer",
+    "sessionId",
+    "startedAt",
+    "executions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "description": "Version of this schema. Readers reject versions newer than they know."
+    },
+    "producer": {
+      "type": "object",
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "What wrote the session, e.g. xping-sdk-dotnet, xping-import-junit, xping-import-trx."
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "description": "Replaces the pre-v1 sdkVersion property."
+    },
+    "assemblies": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Test assemblies or projects in the session. Written first so the store can read it from the file head."
+    },
+    "sessionId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "endedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sessionState": {
+      "type": "string",
+      "enum": [
+        "initial",
+        "partial",
+        "finalized"
+      ]
+    },
+    "environmentInfo": {
+      "$ref": "#/$defs/environmentInfo"
+    },
+    "pullRequestContext": {
+      "$ref": "#/$defs/pullRequestContext"
+    },
+    "executions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/testExecution"
+      }
+    },
+    "quickStatistics": {
+      "type": "object",
+      "properties": {
+        "total": {
+          "type": "integer"
+        },
+        "passed": {
+          "type": "integer"
+        },
+        "failed": {
+          "type": "integer"
+        },
+        "skipped": {
+          "type": "integer"
+        },
+        "inconclusive": {
+          "type": "integer"
+        },
+        "notExecuted": {
+          "type": "integer"
+        },
+        "timeout": {
+          "type": "integer"
+        },
+        "distinctTests": {
+          "type": "integer"
+        },
+        "finalPassed": {
+          "type": "integer"
+        },
+        "finalFailed": {
+          "type": "integer"
+        },
+        "finalSkipped": {
+          "type": "integer"
+        },
+        "finalInconclusive": {
+          "type": "integer"
+        },
+        "finalNotExecuted": {
+          "type": "integer"
+        },
+        "finalTimeout": {
+          "type": "integer"
+        },
+        "totalDurationMs": {
+          "type": "integer"
+        },
+        "slowestTestDurationMs": {
+          "type": "integer"
+        },
+        "slowestTestName": {
+          "type": "string"
+        },
+        "successRate": {
+          "type": "number"
+        },
+        "finalSuccessRate": {
+          "type": "number"
+        },
+        "wallClockDurationMs": {
+          "type": "integer"
+        },
+        "averageDurationMs": {
+          "type": "integer"
+        }
+      }
+    },
+    "statisticsByAssembly": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "passed": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "inconclusive": {
+            "type": "integer"
+          },
+          "notExecuted": {
+            "type": "integer"
+          },
+          "timeout": {
+            "type": "integer"
+          },
+          "distinctTests": {
+            "type": "integer"
+          },
+          "finalPassed": {
+            "type": "integer"
+          },
+          "finalFailed": {
+            "type": "integer"
+          },
+          "finalSkipped": {
+            "type": "integer"
+          },
+          "finalInconclusive": {
+            "type": "integer"
+          },
+          "finalNotExecuted": {
+            "type": "integer"
+          },
+          "finalTimeout": {
+            "type": "integer"
+          },
+          "totalDurationMs": {
+            "type": "integer"
+          },
+          "slowestTestDurationMs": {
+            "type": "integer"
+          },
+          "slowestTestName": {
+            "type": "string"
+          },
+          "discoveredTestCases": {
+            "type": "integer"
+          },
+          "selectedTestCases": {
+            "type": "integer"
+          },
+          "successRate": {
+            "type": "number"
+          },
+          "finalSuccessRate": {
+            "type": "number"
+          },
+          "averageDurationMs": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "environmentInfo": {
+      "type": "object",
+      "properties": {
+        "machineName": {
+          "type": "string"
+        },
+        "operatingSystem": {
+          "type": "string"
+        },
+        "runtimeVersion": {
+          "type": "string"
+        },
+        "framework": {
+          "type": "string"
+        },
+        "environmentName": {
+          "type": "string"
+        },
+        "isCIEnvironment": {
+          "type": "boolean"
+        },
+        "utcOffset": {
+          "type": "string",
+          "pattern": "^-?(\\d+\\.)?\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,7})?$",
+          "description": "Duration in .NET TimeSpan constant format: [d.]hh:mm:ss[.fffffff]."
+        },
+        "timeZoneId": {
+          "type": "string"
+        },
+        "customProperties": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "TODO(spec): runner type, CPU count, runner name and matrix key as first-class fields (needed for per-environment baselines)."
+    },
+    "pullRequestContext": {
+      "type": "object",
+      "properties": {
+        "platform": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "gitHub",
+            "gitLab",
+            "azureDevOps"
+          ]
+        },
+        "serverUrl": {
+          "type": "string"
+        },
+        "repositoryOwner": {
+          "type": "string"
+        },
+        "repositoryName": {
+          "type": "string"
+        },
+        "pullRequestNumber": {
+          "type": "integer"
+        },
+        "commitSha": {
+          "type": "string"
+        },
+        "baseBranch": {
+          "type": "string"
+        },
+        "headBranch": {
+          "type": "string"
+        },
+        "author": {
+          "type": "string"
+        }
+      }
+    },
+    "testIdentity": {
+      "type": "object",
+      "required": [
+        "fullyQualifiedName"
+      ],
+      "properties": {
+        "testFingerprint": {
+          "type": "string",
+          "description": "Stable identity from [TestFingerprint(\"...\")] when present. History is keyed by fingerprint, falling back to fullyQualifiedName. Pre-v1 files from early SDK builds call this testId."
+        },
+        "fullyQualifiedName": {
+          "type": "string"
+        },
+        "assembly": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "className": {
+          "type": "string"
+        },
+        "methodName": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "parameterHash": {
+          "type": "string",
+          "description": "Identifies one case of a parameterized test."
+        },
+        "sourceFile": {
+          "type": "string"
+        },
+        "sourceLineNumber": {
+          "type": "integer"
+        }
+      },
+      "description": "TODO(spec): final test identity (fingerprint + concrete class + case ID, prespec section 7)."
+    },
+    "testMetadata": {
+      "type": "object",
+      "properties": {
+        "categories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "customAttributes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "description": {
+          "type": "string"
+        }
+      }
+    },
+    "testOrchestrationRecord": {
+      "type": "object",
+      "properties": {
+        "positionInSuite": {
+          "type": "integer"
+        },
+        "globalPosition": {
+          "type": "integer"
+        },
+        "previousTestId": {
+          "type": "string"
+        },
+        "previousTestName": {
+          "type": "string"
+        },
+        "previousTestOutcome": {
+          "type": "string",
+          "enum": [
+            "passed",
+            "failed",
+            "skipped",
+            "inconclusive",
+            "notExecuted",
+            "timeout"
+          ]
+        },
+        "wasParallelized": {
+          "type": "boolean"
+        },
+        "concurrentTestCount": {
+          "type": "integer"
+        },
+        "threadId": {
+          "type": "string"
+        },
+        "workerId": {
+          "type": "string"
+        },
+        "suiteElapsedTime": {
+          "type": "string",
+          "pattern": "^-?(\\d+\\.)?\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,7})?$",
+          "description": "Duration in .NET TimeSpan constant format: [d.]hh:mm:ss[.fffffff]."
+        },
+        "collectionName": {
+          "type": "string"
+        }
+      }
+    },
+    "retryMetadata": {
+      "type": "object",
+      "properties": {
+        "attemptNumber": {
+          "type": "integer"
+        },
+        "maxRetries": {
+          "type": "integer"
+        },
+        "passedOnRetry": {
+          "type": "boolean"
+        },
+        "delayBetweenRetries": {
+          "type": "string",
+          "pattern": "^-?(\\d+\\.)?\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,7})?$",
+          "description": "Duration in .NET TimeSpan constant format: [d.]hh:mm:ss[.fffffff]."
+        },
+        "retryReason": {
+          "type": "string"
+        },
+        "retryAttributeName": {
+          "type": "string"
+        },
+        "additionalMetadata": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "testExecution": {
+      "type": "object",
+      "required": [
+        "identity",
+        "outcome"
+      ],
+      "properties": {
+        "executionId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "identity": {
+          "$ref": "#/$defs/testIdentity"
+        },
+        "metadata": {
+          "$ref": "#/$defs/testMetadata"
+        },
+        "testOrchestrationRecord": {
+          "$ref": "#/$defs/testOrchestrationRecord"
+        },
+        "retry": {
+          "$ref": "#/$defs/retryMetadata"
+        },
+        "testName": {
+          "type": "string"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "passed",
+            "failed",
+            "skipped",
+            "inconclusive",
+            "notExecuted",
+            "timeout"
+          ]
+        },
+        "duration": {
+          "type": "string",
+          "pattern": "^-?(\\d+\\.)?\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,7})?$",
+          "description": "Duration in .NET TimeSpan constant format: [d.]hh:mm:ss[.fffffff]."
+        },
+        "startTimeUtc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "endTimeUtc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "exceptionType": {
+          "type": "string"
+        },
+        "errorMessage": {
+          "type": "string"
+        },
+        "stackTrace": {
+          "type": "string"
+        },
+        "errorMessageHash": {
+          "type": "string"
+        },
+        "stackTraceHash": {
+          "type": "string"
+        },
+        "stackTraceOmitted": {
+          "type": "boolean"
+        },
+        "timeoutBudget": {
+          "type": "string",
+          "pattern": "^-?(\\d+\\.)?\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,7})?$",
+          "description": "Duration in .NET TimeSpan constant format: [d.]hh:mm:ss[.fffffff]."
+        },
+        "timeoutBudgetSource": {
+          "type": "string",
+          "enum": [
+            "declared",
+            "infinite"
+          ]
+        },
+        "site": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "testBody",
+            "testSetup",
+            "testTeardown",
+            "fixtureSetup",
+            "fixtureTeardown",
+            "assemblySetup",
+            "assemblyTeardown"
+          ]
+        },
+        "failureSiteMember": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
