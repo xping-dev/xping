@@ -3,7 +3,7 @@
 # Nothing is compiled here.
 #
 # Base: .NET runtime-deps 10.0 (Ubuntu 24.04), pinned by index digest. Dependabot bumps it.
-FROM mcr.microsoft.com/dotnet/runtime-deps:10.0@sha256:e6702e45635272155c2aa35568bcbdb975595c0afa73e2656a973d0a87703282
+FROM mcr.microsoft.com/dotnet/runtime-deps:11.0@sha256:b392cb6e185b0c02cd8066b8b3b2e78d58f7cc15ba5d52ea3e2bfe8f3c0060f9
 
 ARG TARGETARCH
 
