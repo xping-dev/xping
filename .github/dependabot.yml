@@ -10,10 +10,18 @@ updates:
       actions:
         patterns: ['*']
 
+  # Runtime packages follow the .NET 10 LTS line too (10.0.x keeps getting security patches).
+  # Xping.Session is a published library: an 11.x System.Text.Json or logging package here would be
+  # forced onto every SDK user. Test-only packages still get major updates.
   - package-ecosystem: nuget
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: 'Microsoft.Extensions.*'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'System.*'
+        update-types: ['version-update:semver-major']
     groups:
       microsoft-extensions:
         patterns: ['Microsoft.Extensions.*', 'System.*']
