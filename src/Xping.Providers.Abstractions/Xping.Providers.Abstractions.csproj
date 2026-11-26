@@ -14,6 +14,9 @@
     <InternalsVisibleTo Include="Xping.Providers.GitHub" />
     <InternalsVisibleTo Include="Xping.Providers.GitLab" />
     <InternalsVisibleTo Include="Xping.Providers.AzureDevOps" />
+    <InternalsVisibleTo Include="Xping.Providers.GitHub.Tests" />
+    <InternalsVisibleTo Include="Xping.Providers.GitLab.Tests" />
+    <InternalsVisibleTo Include="Xping.Providers.AzureDevOps.Tests" />
     <InternalsVisibleTo Include="xping" />
     <InternalsVisibleTo Include="Xping.Cli.Tests" />
     <!-- Moq builds its proxies here; the detector tests mock internal interfaces. -->

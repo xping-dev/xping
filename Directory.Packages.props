@@ -9,6 +9,7 @@
     <PackageVersion Include="System.CommandLine" Version="2.0.15" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.2" />
     <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.2" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.2" />
   </ItemGroup>
 
   <ItemGroup Label="Session (netstandard2.0)">
@@ -21,5 +22,10 @@
     <PackageVersion Include="xunit.v3" Version="4.0.3" />
     <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="11.0.1" />
     <PackageVersion Include="Moq" Version="4.21.0" />
+    <!-- Apache-2.0 fork of FluentAssertions 7; the dashboard tests copied here use its API.
+         FluentAssertions 8+ needs a commercial licence, so it is not used. -->
+    <PackageVersion Include="AwesomeAssertions" Version="9.6.0" />
+    <PackageVersion Include="NSubstitute" Version="6.2.0" />
+    <PackageVersion Include="WireMock.Net" Version="2.34.0" />
   </ItemGroup>
 </Project>
