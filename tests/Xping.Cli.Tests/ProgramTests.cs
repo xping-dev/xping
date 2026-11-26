@@ -7,7 +7,7 @@ using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using Xping.Cli.Auth;
 using Xping.Cli.Hosting;
-using Xping.Cli.Report;
+using Xping.Core.Triage;
 using Xping.Cli.Services;
 using Xping.Session.Store;
 

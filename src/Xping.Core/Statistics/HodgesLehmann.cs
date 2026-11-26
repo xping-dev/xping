@@ -62,7 +62,7 @@ internal static class HodgesLehmann
     /// Half the mass an exact two-sided 95% interval may leave in each tail (0.025).
     /// </summary>
     /// <remarks>
-    /// Not in <see cref="LocalAnalysisConstants"/>, for the reason
+    /// Not in <see cref="Xping.Core.Triage.LocalAnalysisConstants"/>, for the reason
     /// <see cref="WilsonInterval"/> gives about its own: that class holds the lines measurements are
     /// compared against, and this is the confidence a measurement is stated at.
     /// </remarks>

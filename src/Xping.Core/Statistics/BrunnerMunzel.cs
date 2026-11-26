@@ -51,7 +51,7 @@ namespace Xping.Core.Statistics;
 /// </para>
 /// <para>
 /// Which is why a caller must publish the two arms' spreads beside whatever it decides on this
-/// p-value. <see cref="Providers.DurationProvider"/> does: both arms carry the dispersion of the
+/// p-value. <see cref="Xping.Core.Triage.Providers.DurationProvider"/> does: both arms carry the dispersion of the
 /// very readings handed here, the finding's metrics state them side by side, and
 /// <c>known-limitations.md</c> says what a reader should make of a recent arm that is much the
 /// wider of the two. A p-value alone would invite the reader to treat the level as a ceiling in

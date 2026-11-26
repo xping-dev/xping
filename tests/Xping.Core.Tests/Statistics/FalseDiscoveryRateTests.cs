@@ -3,13 +3,13 @@
  * License: [MIT]
  */
 
-using Xping.Cli.Report;
-using Xping.Cli.Report.Model;
-using Xping.Cli.Report.Providers;
+using Xping.Core.Triage;
+using Xping.Core.Triage.Model;
+using Xping.Core.Triage.Providers;
 using Xping.Session.Models;
 using Xping.Session.Models.Executions;
 
-namespace Xping.Cli.Tests.Report;
+namespace Xping.Core.Tests.Triage;
 
 /// <summary>
 /// What a suite-sized store reports when there is nothing in it to report.
@@ -40,7 +40,7 @@ public sealed class FalseDiscoveryRateTests
     /// </summary>
     /// <remarks>
     /// A tenth, which is what the issue models and what keeps a run's failure rate under
-    /// <see cref="Xping.Cli.Report.LocalAnalysisConstants.EnvironmentalSessionFailureRate"/>. Making
+    /// <see cref="Xping.Core.Triage.LocalAnalysisConstants.EnvironmentalSessionFailureRate"/>. Making
     /// every test unreliable would have half the window written off as an outage, and the providers
     /// would then be declining runs rather than declining findings.
     /// </remarks>

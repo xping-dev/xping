@@ -5,7 +5,9 @@
 
 using Xping.Core.Statistics;
 
-namespace Xping.Cli.Tests.Report;
+using Xping.Core.Triage;
+
+namespace Xping.Core.Tests.Triage;
 
 #pragma warning disable CA5394
 public sealed class CochranArmitageTests

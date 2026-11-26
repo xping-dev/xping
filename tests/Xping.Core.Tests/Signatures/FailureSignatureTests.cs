@@ -3,12 +3,12 @@
  * License: [MIT]
  */
 
-using Xping.Cli.Report;
+using Xping.Core.Triage;
 using Xping.Core.Signatures;
 using Xping.Session.Models.Executions;
 using Xping.Session.Tests.Diagnostics;
 
-namespace Xping.Cli.Tests.Report;
+namespace Xping.Core.Tests.Triage;
 
 public sealed class FailureSignatureTests
 {

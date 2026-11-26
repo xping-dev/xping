@@ -1,0 +1,130 @@
+/*
+ * © 2026 Xping.io. All Rights Reserved.
+ * License: [MIT]
+ */
+
+using Xping.Core.Triage.Indexes;
+using Xping.Core.Triage.Windowing;
+using Xping.Session.Models;
+
+namespace Xping.Core.Triage;
+
+/// <summary>
+/// Everything a finding provider is allowed to see.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Read-only by construction. A provider receives this, returns findings, and does nothing else — it
+/// never reads the disk, never writes anything, and never calls another provider. That restriction
+/// is what lets the coordinator run a provider that throws without the report dying with it, and
+/// what lets every provider be tested against a hand-built window.
+/// </para>
+/// <para>
+/// Anything more than one provider would derive belongs on <see cref="Tests"/> rather than being
+/// recomputed per provider.
+/// </para>
+/// </remarks>
+internal sealed class AnalysisContext
+{
+    private readonly Dictionary<Guid, SessionView> _viewsBySession;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AnalysisContext"/> class.
+    /// </summary>
+    /// <param name="window">The sessions under analysis and their boundaries.</param>
+    /// <param name="revision">Where those sessions came from in source control.</param>
+    public AnalysisContext(AnalysisWindow window, RevisionContext? revision)
+    {
+        Window = window ?? throw new ArgumentNullException(nameof(window));
+        Revision = revision;
+        Tests = TestIndex.Build(window);
+        Signatures = SignatureIndex.Build(window);
+
+        var views = new List<SessionView>(window.Sessions.Count);
+        for (int position = 0; position < window.Sessions.Count; position++)
+            views.Add(SessionView.For(window.Sessions[position], position));
+
+        // A session whose test framework said what it discovered and what it ran is partial exactly
+        // when it ran less, and needs nothing from the window. Every other session falls back to a
+        // comparison, which does: the anchor is the largest run in the window, the best evidence it
+        // holds of how big the suite is, and the only one a store of mostly filtered runs does not
+        // corrupt — see LocalAnalysisConstants.PartialSessionShare.
+        int suiteSize = 0;
+        foreach (SessionView view in views)
+            suiteSize = Math.Max(suiteSize, view.Tests);
+
+        double floor = LocalAnalysisConstants.PartialSessionShare * suiteSize;
+        for (int position = 0; position < views.Count; position++)
+        {
+            SessionView view = views[position];
+            bool partial = view.ReportedPartial ?? (suiteSize > 0 && view.Tests < floor);
+
+            if (partial)
+                views[position] = view with { IsPartial = true };
+        }
+
+        SessionViews = views;
+        _viewsBySession = views.ToDictionary(v => v.Session.SessionId);
+        EnvironmentalSessionCount = views.Count(v => v.IsLikelyEnvironmental);
+        PartialSessionCount = views.Count(v => v.IsPartial);
+    }
+
+    /// <summary>Gets the sessions under analysis and the boundaries that produced them.</summary>
+    public AnalysisWindow Window { get; }
+
+    /// <summary>Gets the shared derived index over those sessions.</summary>
+    public TestIndex Tests { get; }
+
+    /// <summary>Gets the failure signatures of every failure in the window.</summary>
+    public SignatureIndex Signatures { get; }
+
+    /// <summary>Gets the analysed sessions with their health, newest first.</summary>
+    public IReadOnlyList<SessionView> SessionViews { get; }
+
+    /// <summary>
+    /// Gets how many analysed sessions look like the environment failed rather than the tests.
+    /// </summary>
+    /// <remarks>
+    /// Reported in the summary so a reader can tell a quiet window from one whose numbers were
+    /// deliberately discounted. Without that line the discounting would silently change every rate
+    /// in the report with nothing on screen to explain it.
+    /// </remarks>
+    public int EnvironmentalSessionCount { get; }
+
+    /// <summary>
+    /// Gets how many analysed sessions covered only part of the suite.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Reported in the summary as an observation rather than a discount, against the window's own
+    /// run count so the reader has the fraction and not just the fact. Only the kinds that read
+    /// absence set these sessions aside — every other kind reads outcomes of executions that
+    /// happened, and a filtered run's outcomes are as true as any other's — so the line says what
+    /// the window contains and does not claim every number was adjusted.
+    /// </para>
+    /// <para>
+    /// Which numbers <i>were</i> is on each finding rather than here.
+    /// <see cref="Xping.Core.Triage.Model.PopulationRule.ExcludesPartialRuns"/> is the marker the kinds reading
+    /// absence carry, and it is what makes the summary line an observation instead of an
+    /// unexplained caveat: the reader is told a filtered run is in the window, and told per finding
+    /// whether that finding counted it.
+    /// </para>
+    /// </remarks>
+    public int PartialSessionCount { get; }
+
+    /// <summary>
+    /// Gets the health of one analysed session.
+    /// </summary>
+    /// <param name="sessionId">The session to look up.</param>
+    /// <returns>Its view, or <see langword="null"/> when it is not in the window.</returns>
+    public SessionView? SessionViewFor(Guid sessionId) =>
+        _viewsBySession.TryGetValue(sessionId, out SessionView? view) ? view : null;
+
+    /// <summary>
+    /// Gets where the analysed sessions came from, or <see langword="null"/> when unknown.
+    /// </summary>
+    public RevisionContext? Revision { get; }
+
+    /// <summary>Gets the analysed sessions, newest first.</summary>
+    public IReadOnlyList<TestSession> Sessions => Window.Sessions;
+}

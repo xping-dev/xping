@@ -4,7 +4,7 @@
  */
 
 using Xping.Cli.Commands;
-using Xping.Cli.Report;
+using Xping.Core.Triage;
 using Xping.Cli.Reporting;
 using Xping.Cli.Tests.Report;
 using Xping.Session.Models.Executions;

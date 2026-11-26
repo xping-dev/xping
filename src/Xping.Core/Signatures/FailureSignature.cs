@@ -44,7 +44,7 @@ namespace Xping.Core.Signatures;
 /// </param>
 /// <param name="ErrorMessageHash">
 /// The SDK's hash of the message, as stored; null when the adapter recorded none. On a signature
-/// that stands for several failures, the one most of them carry (see <see cref="Indexes.SignatureIndex"/>).
+/// that stands for several failures, the one most of them carry (see <see cref="Xping.Core.Triage.Indexes.SignatureIndex"/>).
 /// </param>
 internal sealed record FailureSignature(
     string Hash,

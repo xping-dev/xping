@@ -5,7 +5,9 @@
 
 using Xping.Core.Statistics;
 
-namespace Xping.Cli.Tests.Report;
+using Xping.Core.Triage;
+
+namespace Xping.Core.Tests.Triage;
 
 public sealed class WilsonIntervalTests
 {

@@ -70,7 +70,7 @@ internal static class RobustDispersion
     /// Reciprocal of the median absolute deviation of a standard normal (1 / 0.6745).
     /// </summary>
     /// <remarks>
-    /// Not in <see cref="LocalAnalysisConstants"/>, and neither is <see cref="QuartileConsistency"/>.
+    /// Not in <see cref="Xping.Core.Triage.LocalAnalysisConstants"/>, and neither is <see cref="QuartileConsistency"/>.
     /// That class holds the lines measurements are compared against; these are part of the definition
     /// of the measurement, and changing one would not move a threshold but rename the statistic.
     /// </remarks>

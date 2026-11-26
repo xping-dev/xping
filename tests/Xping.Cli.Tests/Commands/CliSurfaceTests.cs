@@ -10,7 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Xping.Cli.Auth;
 using Xping.Cli.Cloud;
 using Xping.Cli.Commands;
-using Xping.Cli.Report;
+using Xping.Core.Triage;
 using Xping.Cli.Tests.Report;
 using Xping.Session.Models;
 using Xping.Session.Models.Executions;

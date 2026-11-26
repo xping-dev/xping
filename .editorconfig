@@ -325,3 +325,7 @@ dotnet_diagnostic.IDE0005.severity = warning
 
 # IDE0055: Fix formatting
 dotnet_diagnostic.IDE0055.severity = warning
+# The triage engine migrated from the old `xping report` command. Nothing composes it until
+# XP005 does. TODO(spec): remove this exception when XP005 wires the providers.
+[src/Xping.Core/Triage/**.cs]
+dotnet_diagnostic.CA1812.severity = none

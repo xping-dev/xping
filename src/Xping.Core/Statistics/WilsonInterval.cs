@@ -35,7 +35,7 @@ internal static class WilsonInterval
     /// Standard normal deviate for a two-sided 95% interval (1.96).
     /// </summary>
     /// <remarks>
-    /// Not in <see cref="LocalAnalysisConstants"/>: that class holds the lines measurements are
+    /// Not in <see cref="Xping.Core.Triage.LocalAnalysisConstants"/>: that class holds the lines measurements are
     /// compared against, and this is the confidence the comparison is made at. 95% is the convention
     /// a reader will assume when the report says a rate is "at least" something.
     /// <para>

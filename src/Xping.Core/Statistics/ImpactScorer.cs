@@ -3,10 +3,12 @@
  * License: [MIT]
  */
 
-using Xping.Cli.Report.Indexes;
-using Xping.Cli.Report.Model;
-using Xping.Cli.Report.Providers;
+using Xping.Core.Triage.Indexes;
+using Xping.Core.Triage.Model;
+using Xping.Core.Triage.Providers;
 using Xping.Session.Models;
+
+using Xping.Core.Triage;
 
 namespace Xping.Core.Statistics;
 

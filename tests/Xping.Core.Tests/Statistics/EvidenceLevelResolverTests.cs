@@ -3,14 +3,14 @@
  * License: [MIT]
  */
 
-using Xping.Cli.Report;
-using Xping.Cli.Report.Indexes;
-using Xping.Cli.Report.Model;
+using Xping.Core.Triage;
+using Xping.Core.Triage.Indexes;
+using Xping.Core.Triage.Model;
 using Xping.Core.Statistics;
 using Xping.Session.Models;
 using Xping.Session.Models.Executions;
 
-namespace Xping.Cli.Tests.Report;
+namespace Xping.Core.Tests.Triage;
 
 public sealed class EvidenceLevelResolverTests
 {

@@ -8,4 +8,10 @@
     <ProjectReference Include="..\Xping.Session\Xping.Session.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Xping.Core.Tests" />
+    <InternalsVisibleTo Include="xping" />
+    <InternalsVisibleTo Include="Xping.Cli.Tests" />
+  </ItemGroup>
+
 </Project>

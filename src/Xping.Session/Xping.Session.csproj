@@ -24,6 +24,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Xping.Session.Tests" />
     <InternalsVisibleTo Include="Xping.Core" />
+    <InternalsVisibleTo Include="Xping.Core.Tests" />
     <InternalsVisibleTo Include="Xping.Providers.Abstractions" />
     <InternalsVisibleTo Include="Xping.Providers.Abstractions.Tests" />
     <InternalsVisibleTo Include="xping" />
