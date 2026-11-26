@@ -25,6 +25,11 @@
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <PublishAot>false</PublishAot>
     <PublishTrimmed>false</PublishTrimmed>
+    <!-- One file to ship: symbols embedded, no XML docs or reference symbols beside it. -->
+    <DebugType>embedded</DebugType>
+    <PublishDocumentationFile>false</PublishDocumentationFile>
+    <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
+    <AllowedReferenceRelatedFileExtensions>none</AllowedReferenceRelatedFileExtensions>
   </PropertyGroup>
 
   <ItemGroup>
