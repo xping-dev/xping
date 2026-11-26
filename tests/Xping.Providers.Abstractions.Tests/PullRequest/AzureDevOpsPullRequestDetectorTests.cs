@@ -5,9 +5,9 @@
 
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using Xping.Session.Models.PullRequests;
 using Xping.Providers.Environment;
 using Xping.Providers.PullRequest.Internals;
+using Xping.Session.Models.PullRequests;
 
 namespace Xping.Providers.Abstractions.Tests.PullRequest;
 

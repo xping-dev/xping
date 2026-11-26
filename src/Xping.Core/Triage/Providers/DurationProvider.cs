@@ -5,9 +5,9 @@
 
 using System.Collections.Immutable;
 using System.Globalization;
+using Xping.Core.Statistics;
 using Xping.Core.Triage.Indexes;
 using Xping.Core.Triage.Model;
-using Xping.Core.Statistics;
 
 namespace Xping.Core.Triage.Providers;
 

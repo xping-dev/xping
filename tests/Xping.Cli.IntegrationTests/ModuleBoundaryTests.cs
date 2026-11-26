@@ -28,8 +28,14 @@ public sealed class ModuleBoundaryTests
         ["Xping.Providers.AzureDevOps"] = ["Xping.Providers.Abstractions"],
     };
 
-    public static TheoryData<string> SourceProjects() =>
-        new(Directory.GetDirectories(RepositoryPaths.Combine("src")).Select(Path.GetFileName).OfType<string>().Order(StringComparer.Ordinal));
+    public static TheoryData<string> SourceProjects() => new(Projects());
+
+    // src/Shared holds source files linked into projects; it is not a project and has no references.
+    private static IEnumerable<string> Projects() =>
+        Directory.GetDirectories(RepositoryPaths.Combine("src"))
+            .Where(dir => File.Exists(Path.Combine(dir, Path.GetFileName(dir) + ".csproj")))
+            .Select(Path.GetFileName).OfType<string>()
+            .Order(StringComparer.Ordinal);
 
     [Theory]
     [MemberData(nameof(SourceProjects))]
@@ -48,9 +54,7 @@ public sealed class ModuleBoundaryTests
     [Fact]
     public void NothingReferencesTheCli()
     {
-        var offenders = Directory.GetDirectories(RepositoryPaths.Combine("src"))
-            .Select(Path.GetFileName).OfType<string>()
-            .Where(project => References(project).Contains("Xping.Cli"));
+        var offenders = Projects().Where(project => References(project).Contains("Xping.Cli"));
 
         Assert.Empty(offenders);
     }

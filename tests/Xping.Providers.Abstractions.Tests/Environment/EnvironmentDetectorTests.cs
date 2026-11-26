@@ -6,12 +6,12 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using Xping.Session.Models.Environments;
+using Xping.Providers.Abstractions.Tests.Helpers;
 using Xping.Providers.Environment;
 using Xping.Providers.Environment.Internals;
+using Xping.Session.Models.Environments;
 using Xping.Session.Serialization;
 using Xping.Session.Serialization.Internals;
-using Xping.Providers.Abstractions.Tests.Helpers;
 
 namespace Xping.Providers.Abstractions.Tests.Environment;
 

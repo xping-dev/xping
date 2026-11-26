@@ -4,10 +4,10 @@
  */
 
 using System.Text.Json;
+using Xping.Core.Statistics;
 using Xping.Core.Triage;
 using Xping.Core.Triage.Model;
 using Xping.Core.Triage.Providers;
-using Xping.Core.Statistics;
 using Xping.Session.Models;
 using Xping.Session.Models.Executions;
 

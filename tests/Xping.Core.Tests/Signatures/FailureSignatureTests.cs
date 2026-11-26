@@ -3,8 +3,8 @@
  * License: [MIT]
  */
 
-using Xping.Core.Triage;
 using Xping.Core.Signatures;
+using Xping.Core.Triage;
 using Xping.Session.Models.Executions;
 using Xping.Session.Tests.Diagnostics;
 

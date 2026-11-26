@@ -1,36 +1,22 @@
-/*
- * © 2026 Xping.io. All Rights Reserved.
- * License: [MIT]
- */
+// SPDX-License-Identifier: MIT
+// Copyright (c) Xping
 
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Http;
-using Microsoft.Extensions.Options;
 using Xping.Cli.Hosting;
-using Xping.Sdk.Core.Configuration;
-using Xping.Sdk.Core.Extensions;
-using Xping.Sdk.Core.Services.Upload;
+using Xping.Core.Triage.Providers;
 
 namespace Xping.Cli.Tests.Hosting;
 
 public sealed class ServiceCollectionExtensionsTests
 {
     [Fact]
-    public void TheCliAddsNothingToTheSdkUploaderClient()
+    public void EveryRegisteredServiceCanBeBuilt()
     {
-        HttpClientFactoryOptions alone = UploaderOptions(new ServiceCollection().AddXpingUploader(XpingMode.Cloud));
-        HttpClientFactoryOptions withCli = UploaderOptions(
-            new ServiceCollection()
-                .AddXpingCliServices(TextWriter.Null, TextWriter.Null, TextReader.Null, Terminals.All(false))
-                .AddXpingUploader(XpingMode.Cloud));
+        using ServiceProvider provider = new ServiceCollection()
+            .AddLogging()
+            .AddXpingCliServices(TextWriter.Null, TextWriter.Null, TextReader.Null, Terminals.All(false))
+            .BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
 
-        Assert.Equal(alone.HttpMessageHandlerBuilderActions.Count, withCli.HttpMessageHandlerBuilderActions.Count);
-        Assert.Equal(alone.HttpClientActions.Count, withCli.HttpClientActions.Count);
-    }
-
-    private static HttpClientFactoryOptions UploaderOptions(IServiceCollection services)
-    {
-        using ServiceProvider provider = services.AddLogging().BuildServiceProvider();
-        return provider.GetRequiredService<IOptionsMonitor<HttpClientFactoryOptions>>().Get(nameof(IXpingUploader));
+        Assert.Equal(6, provider.GetServices<IFindingProvider>().Count());
     }
 }

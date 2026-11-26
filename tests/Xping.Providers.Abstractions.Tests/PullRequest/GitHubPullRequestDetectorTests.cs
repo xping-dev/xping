@@ -7,12 +7,12 @@ using System.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
-using Xping.Session.Models.PullRequests;
+using Xping.Providers.Abstractions.Tests.Helpers;
 using Xping.Providers.Environment;
 using Xping.Providers.PullRequest.Internals;
+using Xping.Session.Models.PullRequests;
 using Xping.Session.Serialization;
 using Xping.Session.Serialization.Internals;
-using Xping.Providers.Abstractions.Tests.Helpers;
 
 namespace Xping.Providers.Abstractions.Tests.PullRequest;
 

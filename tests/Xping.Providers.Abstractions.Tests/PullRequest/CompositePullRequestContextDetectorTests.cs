@@ -4,8 +4,8 @@
  */
 
 using Microsoft.Extensions.Logging.Abstractions;
-using Xping.Session.Models.PullRequests;
 using Xping.Providers.PullRequest.Internals;
+using Xping.Session.Models.PullRequests;
 
 namespace Xping.Providers.Abstractions.Tests.PullRequest;
 

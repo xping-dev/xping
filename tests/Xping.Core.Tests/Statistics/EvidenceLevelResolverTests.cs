@@ -3,10 +3,10 @@
  * License: [MIT]
  */
 
+using Xping.Core.Statistics;
 using Xping.Core.Triage;
 using Xping.Core.Triage.Indexes;
 using Xping.Core.Triage.Model;
-using Xping.Core.Statistics;
 using Xping.Session.Models;
 using Xping.Session.Models.Executions;
 

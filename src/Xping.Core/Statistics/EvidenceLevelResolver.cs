@@ -3,10 +3,9 @@
  * License: [MIT]
  */
 
+using Xping.Core.Triage;
 using Xping.Core.Triage.Indexes;
 using Xping.Core.Triage.Model;
-
-using Xping.Core.Triage;
 
 namespace Xping.Core.Statistics;
 

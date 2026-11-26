@@ -8,8 +8,8 @@ using System.Text;
 using System.Text.Json;
 using Xping.Session.Models;
 using Xping.Session.Models.Builders;
-using Xping.Session.Store.Internals;
 using Xping.Session.Serialization;
+using Xping.Session.Store.Internals;
 
 namespace Xping.Session.Tests.Store;
 

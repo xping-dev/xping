@@ -3,10 +3,9 @@
  * License: [MIT]
  */
 
+using Xping.Core.Triage;
 using Xping.Core.Triage.Model;
 using Xping.Session.Store;
-
-using Xping.Core.Triage;
 
 namespace Xping.Core.Tests.Triage;
 

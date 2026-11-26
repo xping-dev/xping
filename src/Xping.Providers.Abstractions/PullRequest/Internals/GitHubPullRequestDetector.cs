@@ -7,8 +7,8 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
-using Xping.Session.Models.PullRequests;
 using Xping.Providers.Environment;
+using Xping.Session.Models.PullRequests;
 using Xping.Session.Serialization;
 
 namespace Xping.Providers.PullRequest.Internals;

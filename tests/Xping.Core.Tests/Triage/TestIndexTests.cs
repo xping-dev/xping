@@ -3,12 +3,11 @@
  * License: [MIT]
  */
 
+using Xping.Core.Triage;
 using Xping.Core.Triage.Indexes;
 using Xping.Core.Triage.Windowing;
 using Xping.Session.Models;
 using Xping.Session.Models.Executions;
-
-using Xping.Core.Triage;
 
 namespace Xping.Core.Tests.Triage;
 

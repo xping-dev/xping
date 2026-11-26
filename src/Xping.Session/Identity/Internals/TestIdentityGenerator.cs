@@ -6,9 +6,9 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using Xping.Session.Diagnostics;
 using Xping.Session.Models.Builders;
 using Xping.Session.Models.Executions;
-using Xping.Session.Diagnostics;
 
 namespace Xping.Session.Identity.Internals;
 

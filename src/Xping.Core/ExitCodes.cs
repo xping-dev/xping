@@ -18,6 +18,9 @@ public static class ExitCodes
     /// <summary>An input (test results, history, configuration) is missing or unreadable.</summary>
     public const int InputError = 2;
 
+    /// <summary>The user cancelled the run (Ctrl+C). 128 + SIGINT, the usual shell convention.</summary>
+    public const int Cancelled = 130;
+
     /// <summary>The command line could not be parsed (unknown option, missing argument). Same value as <c>EX_USAGE</c>.</summary>
     public const int UsageError = 64;
 

@@ -4,10 +4,9 @@
  */
 
 using System.Collections.ObjectModel;
-
+using Xping.Core.Statistics;
 using Xping.Core.Triage.Model;
 using Xping.Core.Triage.Providers;
-using Xping.Core.Statistics;
 
 namespace Xping.Core.Triage;
 

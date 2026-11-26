@@ -5,8 +5,8 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
-using Xping.Session.Models.PullRequests;
 using Xping.Providers.Environment;
+using Xping.Session.Models.PullRequests;
 
 namespace Xping.Providers.PullRequest.Internals;
 
