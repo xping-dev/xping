@@ -330,27 +330,29 @@ Drafts under `docs/specs/followups/` (index: `followups/README.md`):
 
 ## 8. docs.xping.io switch steps
 
-Today: `docs.xping.io` is a DNS CNAME to `xping-dev.github.io`. GitHub Pages of **xping-dev/sdk-dotnet** claims the custom domain and is deployed by the `docs` job in sdk-dotnet's `release.yml` (docfx). GitHub routes a custom domain to the one repository in the organisation that claims it, so the move changes **repository settings only; DNS stays as it is**.
+**Status (2026-11-27):** steps 1–5 and 7 are done. `docs.xping.io` is served by xping-dev/docs, with HTTPS enforced. Step 6 is xping-dev/sdk-dotnet#399.
+
+Before the switch, `docs.xping.io` (a DNS CNAME to `xping-dev.github.io`) was claimed by the GitHub Pages site of **xping-dev/sdk-dotnet**, deployed by the `publish-docs` job in its `release.yml` (docfx). GitHub routes a custom domain to the one repository in the organisation that claims it, so the move changes **repository settings only; DNS stays as it is**.
 
 1. **Verify the domain** for the organisation (Org settings → Pages → Verified domains → `xping.io`), if it isn't verified yet. This prevents a takeover during the gap in step 5.
 2. **Prepare the content in sdk-dotnet first.** Merge `feat/docs-overhaul`. Then list the pages to move. Sections on `main` today:
    - getting-started (5), guides (13), configuration (2), troubleshooting (2), performance (2), cli (1), known-limitations, versioning;
    - `internals/implementation-specs` (old CLI specs: do not move).
-3. **`xping-dev/docs`** exists (public, MIT; created 2026-11-26 from the Phase 5 skeleton). Next:
+3. **`xping-dev/docs`** exists (public, MIT; created 2026-11-26 from the Phase 5 skeleton). Done in xping-dev/docs#1, from `xping-dev/sdk-dotnet@dc64c02`:
    - move the SDK pages to `sdk/`, in one commit naming `xping-dev/sdk-dotnet@<sha> docs/`;
    - drop the Cloud, old `report` CLI and `internals/` pages.
-4. **Keep old URLs working.** Code and NuGet readmes of released SDK packages link these pages; each gets a redirect page (docfx `redirect_url` metadata) at its old path, pointing at the new one:
+4. **Keep old URLs working.** Done: 27 redirect pages. Code and NuGet readmes of released SDK packages link these pages; each gets a redirect page (docfx `redirect_url` metadata) at its old path, pointing at the new one:
    - `/index.html`, `/getting-started/quickstart-{nunit,xunit,mstest}.html`, `/getting-started/local-first.html`;
    - `/configuration/configuration-reference.html`, `/configuration/local-store.html`;
    - `/troubleshooting/known-limitations.html`;
-   - `/cli/command-reference.html`, `/cli/reading-the-report.html`: these two point at the 2.x CLI overview, noting that the 1.0.0-rc `report` command is gone.
-5. **Switch**, in this order and in one sitting (the gap is minutes):
+   - `/cli/command-reference.html`, `/cli/reading-the-report.html`: these two, and every other dropped page, point at an overview page.
+5. **Switch** (done 2026-11-27), in this order and in one sitting (the gap is minutes):
    1. In xping-dev/docs: Settings → Pages → Source: GitHub Actions. Run the `Docs` workflow once; the site is at `https://xping-dev.github.io/docs/`. Check it.
    2. In xping-dev/sdk-dotnet: Settings → Pages → Custom domain → remove `docs.xping.io`.
    3. In xping-dev/docs: Settings → Pages → Custom domain → `docs.xping.io` → Save. Wait for the DNS check and the certificate, then tick *Enforce HTTPS*.
-6. **Clean up sdk-dotnet:** remove the `docs` job from `release.yml` and the `docs/` site sources, keeping a README link to docs.xping.io (see `followups/sdk-dotnet-readme-note.md`). Unpublish its Pages site.
-7. **Check:**
+6. **Clean up sdk-dotnet** (xping-dev/sdk-dotnet#399): remove the `Docs` workflow and the `publish-docs` job from `release.yml` and the `docs/` site sources, keeping a README link to docs.xping.io (see `followups/sdk-dotnet-readme-note.md`). Unpublish its Pages site.
+7. **Check** (done 2026-11-27):
    - `curl -sI https://docs.xping.io/` returns 200 from GitHub with a valid certificate;
    - each redirect path in step 4 lands on its new page;
    - search works.
-8. **Rollback:** remove the custom domain from xping-dev/docs and re-add it to xping-dev/sdk-dotnet, whose Pages deployment is untouched until step 6.
+8. **Rollback:** remove the custom domain from xping-dev/docs and re-add it to xping-dev/sdk-dotnet, whose Pages deployment is untouched until step 6. After step 6, revert xping-dev/sdk-dotnet#399 and redeploy first.
