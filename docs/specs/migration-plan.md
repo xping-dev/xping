@@ -302,11 +302,11 @@ Follow-ups:
 | The container builds arm64 under QEMU | Only `apt-get install git` runs emulated. The binary itself is built natively in the binaries job. |
 
 One-time setup before the first tag `v2.0.0-alpha.1`:
-1. **nuget.org trusted publishing:** add a policy for owner `Xping`, repository `xping-dev/xping`, workflow `release.yml`, environment `release`. Set the repository variable `NUGET_USER` to the nuget.org profile name that owns the packages.
+1. **nuget.org trusted publishing:** add a policy for owner `Xping`, repository `xping-dev/xping`, workflow `release.yml`, environment `release`. Set the repository variable `NUGET_USER` to the nuget.org profile name that owns the packages. **Done 2026-11-27:** policy "Xping Release", scoped to `Xping.Cli` and `Xping.Session`; `NUGET_USER` = `xping-admin`.
 2. **Old CLI versions:** mark `Xping.Cli` 1.0.0-rc.1…rc.8 as deprecated, with 2.0.0-alpha.1 as the alternative (Q4). Text: `docs/specs/followups/` (Phase 5).
 3. **ghcr.io:** after the first push, make the `xping` package public and link it to the repository.
-4. **Repository settings:** enable private vulnerability reporting (SECURITY.md). Optionally add required reviewers to the `release` environment.
-5. **nuget.org:** request the `Xping.*` ID prefix reservation (§5).
+4. **Repository settings:** enable private vulnerability reporting (SECURITY.md; **done 2026-11-27**). Optionally add required reviewers to the `release` environment.
+5. **nuget.org:** request the `Xping.*` ID prefix reservation (§5). Requested 2026-11-27, awaiting nuget.org's reply.
 
 ### Phase 5: docs and cross-repo follow-ups (branch `docs/followups`, merged in #6)
 
@@ -315,7 +315,7 @@ Drafts under `docs/specs/followups/` (index: `followups/README.md`):
 | Draft | State |
 |---|---|
 | `docs-repo/`: skeleton for public `xping-dev/docs`. **Done:** moved to [xping-dev/docs](https://github.com/xping-dev/docs) in `8bec4bc` (2026-11-26), with `xping-version.txt` = `main` until the first release. Live at docs.xping.io since 2026-11-27 (§8). | docfx 2.81.0 site with sections (getting started, CI setup, rules, reference, SDK), `scripts/import-reference.sh <tag>`, which imports `docs/reference/*.md` and `schema/*.json` from this repo at the tag in `xping-version.txt`, and a Pages workflow with pinned actions. Built locally against `main`: 0 warnings, 0 errors. |
-| `sdk-dotnet-readme-note.md` | Not applied yet: the sdk-dotnet README links docs.xping.io but has no banner. README banner pointing to this repo, plus what to delete in sdk-dotnet afterwards. Wording about Xping Cloud itself is a TODO(decision), prespec §11.12. |
+| `sdk-dotnet-cleanup.md` (was `sdk-dotnet-readme-note.md`) | What to delete in sdk-dotnet after 2.0.0-alpha.1 ships: the old CLI code, its package and README sections. The README banner was dropped (2026-11-27): the old CLI has no users to redirect. |
 | `nuget-deprecation.md` | Deprecation of `Xping.Cli` 1.0.0-rc.1…rc.8: reason Legacy, alternative 2.0.0-alpha.1, a 495-character message. Not unlisted (Q4). |
 | `sdk-on-xping-session.md` | The steps: a public writer API in `Xping.Session` with API-compat checks, then sdk-dotnet replaces its model/store copies with the package. Risks included. |
 | `action/`: skeleton for `xping-dev/action` (repo not created yet) | Composite `action.yml` at the root, `command: check \| record \| compact`, exact `version`. It downloads the release binary for the runner, checks it against `SHA256SUMS`, runs `gh attestation verify --signer-workflow` and then the CLI. Inputs reach the scripts only through env. A smoke workflow covers 4 OSes. Scripts are shellcheck-clean, the workflow actionlint-clean. |
@@ -350,7 +350,7 @@ Before the switch, `docs.xping.io` (a DNS CNAME to `xping-dev.github.io`) was cl
    1. In xping-dev/docs: Settings → Pages → Source: GitHub Actions. Run the `Docs` workflow once; the site is at `https://xping-dev.github.io/docs/`. Check it.
    2. In xping-dev/sdk-dotnet: Settings → Pages → Custom domain → remove `docs.xping.io`.
    3. In xping-dev/docs: Settings → Pages → Custom domain → `docs.xping.io` → Save. Wait for the DNS check and the certificate, then tick *Enforce HTTPS*.
-6. **Clean up sdk-dotnet** (done in xping-dev/sdk-dotnet#399): remove the `Docs` workflow and the `publish-docs` job from `release.yml` and the `docs/` site sources, keeping a README link to docs.xping.io (see `followups/sdk-dotnet-readme-note.md`). Unpublish its Pages site.
+6. **Clean up sdk-dotnet** (done in xping-dev/sdk-dotnet#399): remove the `Docs` workflow and the `publish-docs` job from `release.yml` and the `docs/` site sources, keeping a README link to docs.xping.io. Unpublish its Pages site.
 7. **Check** (done 2026-11-27):
    - `curl -sI https://docs.xping.io/` returns 200 from GitHub with a valid certificate;
    - each redirect path in step 4 lands on its new page;
