@@ -302,11 +302,11 @@ Follow-ups:
 | The container builds arm64 under QEMU | Only `apt-get install git` runs emulated. The binary itself is built natively in the binaries job. |
 
 One-time setup before the first tag `v2.0.0-alpha.1`:
-1. **nuget.org trusted publishing:** add a policy for owner `Xping`, repository `xping-dev/xping`, workflow `release.yml`, environment `release`. Set the repository variable `NUGET_USER` to the nuget.org profile name that owns the packages.
+1. **nuget.org trusted publishing:** add a policy for owner `Xping`, repository `xping-dev/xping`, workflow `release.yml`, environment `release`. Set the repository variable `NUGET_USER` to the nuget.org profile name that owns the packages. **Done 2026-11-27:** policy "Xping Release", scoped to `Xping.Cli` and `Xping.Session`; `NUGET_USER` = `xping-admin`.
 2. **Old CLI versions:** mark `Xping.Cli` 1.0.0-rc.1…rc.8 as deprecated, with 2.0.0-alpha.1 as the alternative (Q4). Text: `docs/specs/followups/` (Phase 5).
 3. **ghcr.io:** after the first push, make the `xping` package public and link it to the repository.
-4. **Repository settings:** enable private vulnerability reporting (SECURITY.md). Optionally add required reviewers to the `release` environment.
-5. **nuget.org:** request the `Xping.*` ID prefix reservation (§5).
+4. **Repository settings:** enable private vulnerability reporting (SECURITY.md; **done 2026-11-27**). Optionally add required reviewers to the `release` environment.
+5. **nuget.org:** request the `Xping.*` ID prefix reservation (§5). Requested 2026-11-27, awaiting nuget.org's reply.
 
 ### Phase 5: docs and cross-repo follow-ups (branch `docs/followups`, merged in #6)
 
