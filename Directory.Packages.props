@@ -7,15 +7,15 @@
   <ItemGroup Label="CLI">
     <!-- Stays on 2.0.x: the CLI plumbing migrated from sdk-dotnet is written against 2.0. -->
     <PackageVersion Include="System.CommandLine" Version="2.0.15" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.2" />
-    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.2" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="10.0.15" />
     <PackageVersion Include="Microsoft.Extensions.Http" Version="10.0.2" />
   </ItemGroup>
 
   <ItemGroup Label="Session (netstandard2.0)">
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.2" />
-    <PackageVersion Include="System.Text.Json" Version="10.0.2" />
-    <PackageVersion Include="System.Reflection.Metadata" Version="10.0.2" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.15" />
+    <PackageVersion Include="System.Text.Json" Version="10.0.15" />
+    <PackageVersion Include="System.Reflection.Metadata" Version="10.0.15" />
   </ItemGroup>
 
   <ItemGroup Label="Tests">
